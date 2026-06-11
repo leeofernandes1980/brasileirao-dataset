@@ -101,10 +101,14 @@ def _get_public(path: str) -> dict:
         log.debug("404 (sem dados): %s", path)
         return {}
 
-    if r.status_code == 429:
-        log.warning("Rate limited — aguardando 30s e tentando novamente...")
-        time.sleep(30)
+    if r.status_code in (429, 403):
+        wait = 30 if r.status_code == 429 else 15
+        log.warning("%d em %s — aguardando %ds e tentando novamente...", r.status_code, path, wait)
+        time.sleep(wait)
         r = requests.get(url, headers=_HDR_PUBLIC, timeout=30)
+        if r.status_code in (403, 404, 429):
+            log.warning("%d persistente — ignorando %s (rodada indisponível ou bloqueada)", r.status_code, path)
+            return {}
 
     r.raise_for_status()
     data = r.json()
