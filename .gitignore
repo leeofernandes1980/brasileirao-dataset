@@ -1,0 +1,51 @@
+# Dados grandes - cache da API (308MB)
+datalake/bronze/api_cache/
+
+# Cache da API Sofascore (308MB - muito grande para git)
+# Para regenerar: python datalake/pipelines/ingest_sofascore.py --seasons 2024 2025 2026
+
+# Excel (dados brutos originais pesados)
+*.xlsx
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+datalake/.env
+
+# Logs de ingestão (gerados automaticamente)
+ingest_historico_log.txt
+ingest_detailed.log
+
+# Node / Next.js (dashboard)
+dashboard/node_modules/
+dashboard/.next/
+dashboard/tsconfig.tsbuildinfo
+dashboard/next-env.d.ts
+
+# Arquivos de build/temporários antigos
+b-2000
+b-2001
+b-2002
+b-2003
+b-2004
+b-2005
+b-2006
+b-2007
+b-2008
+b-2009
+b-2010
+b-2011
+b-2012
+b-2013
+b-2014
+b-2015
+b-2016
+b-2017
+b-2018
+b-2019
+*.BAK.*
+
+# Marcadores de sessão
+dashboard/criamos

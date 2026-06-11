@@ -1,0 +1,166 @@
+# Brasileirao Data Lake — Catálogo de Dados
+# Atualizado: 2026-06-06
+
+datalake:
+  cobertura: "2003–2026"
+  competicao: "Campeonato Brasileiro Série A"
+  formato_armazenamento: Parquet (Apache Arrow)
+  motor_query: DuckDB
+
+layers:
+  bronze:
+    descricao: "Dados brutos preservados sem modificação"
+    paths:
+      - bronze/csv/       # CSVs originais do dataset 2003-2023
+      - bronze/json/      # JSONs originais por temporada
+      - bronze/api_cache/ # Respostas brutas da API-Football (2024-2026)
+
+  silver:
+    descricao: "Dados limpos, esquema padronizado, campo temporada derivado"
+    tabelas:
+
+      partidas:
+        arquivo: silver/partidas.parquet
+        descricao: "Uma linha por partida disputada"
+        colunas:
+          partida_id:        {tipo: int,    descricao: "ID único da partida"}
+          temporada:         {tipo: int,    descricao: "Ano do campeonato (2003-2026)"}
+          rodada:            {tipo: int,    descricao: "Rodada do campeonato"}
+          data:              {tipo: date,   descricao: "Data da partida"}
+          hora:              {tipo: string, descricao: "Horário de início (HH:MM)"}
+          mandante:          {tipo: string, descricao: "Clube da casa"}
+          visitante:         {tipo: string, descricao: "Clube visitante"}
+          formacao_mandante: {tipo: string, descricao: "Formação tática do mandante"}
+          formacao_visitante:{tipo: string, descricao: "Formação tática do visitante"}
+          tecnico_mandante:  {tipo: string, descricao: "Técnico do mandante"}
+          tecnico_visitante: {tipo: string, descricao: "Técnico do visitante"}
+          vencedor:          {tipo: string, descricao: "Nome do vencedor ou '-' para empate"}
+          arena:             {tipo: string, descricao: "Nome do estádio"}
+          gols_mandante:     {tipo: int,    descricao: "Gols marcados pelo mandante"}
+          gols_visitante:    {tipo: int,    descricao: "Gols marcados pelo visitante"}
+          estado_mandante:   {tipo: string, descricao: "UF do clube mandante"}
+          estado_visitante:  {tipo: string, descricao: "UF do clube visitante"}
+          status:            {tipo: string, descricao: "Status da partida (FT, NS, PST…) — apenas dados API"}
+          fonte:             {tipo: string, descricao: "historico_csv | api_football"}
+
+      estatisticas:
+        arquivo: silver/estatisticas.parquet
+        descricao: "Duas linhas por partida (uma por time) com estatísticas de desempenho"
+        colunas:
+          partida_id:      {tipo: int,   descricao: "Referência a partidas.partida_id"}
+          temporada:       {tipo: int}
+          rodada:          {tipo: int}
+          clube:           {tipo: string}
+          chutes:          {tipo: int,   descricao: "Total de finalizações"}
+          chutes_no_alvo:  {tipo: int,   descricao: "Finalizações no gol"}
+          posse_de_bola:   {tipo: float, descricao: "Posse de bola em %"}
+          passes:          {tipo: int}
+          precisao_passes: {tipo: float, descricao: "Precisão de passe em %"}
+          faltas:          {tipo: int}
+          cartao_amarelo:  {tipo: int}
+          cartao_vermelho: {tipo: int}
+          impedimentos:    {tipo: int}
+          escanteios:      {tipo: int}
+          fonte:           {tipo: string}
+        nota: "Dados esparsas para temporadas 2003-2011 (coletados manualmente)"
+
+      gols:
+        arquivo: silver/gols.parquet
+        descricao: "Um registro por gol marcado"
+        colunas:
+          partida_id:  {tipo: int}
+          temporada:   {tipo: int}
+          rodada:      {tipo: int}
+          clube:       {tipo: string, descricao: "Clube que marcou"}
+          atleta:      {tipo: string, descricao: "Nome do artilheiro"}
+          minuto:      {tipo: int,    descricao: "Minuto do gol"}
+          tipo_de_gol: {tipo: string, descricao: "Normal | Penalty | Gol Contra | etc."}
+          fonte:       {tipo: string}
+
+      cartoes:
+        arquivo: silver/cartoes.parquet
+        descricao: "Um registro por cartão aplicado"
+        colunas:
+          partida_id: {tipo: int}
+          temporada:  {tipo: int}
+          rodada:     {tipo: int}
+          clube:      {tipo: string}
+          cartao:     {tipo: string, descricao: "Amarelo | Vermelho"}
+          atleta:     {tipo: string}
+          num_camisa: {tipo: string}
+          posicao:    {tipo: string, descricao: "Posição em campo"}
+          minuto:     {tipo: int}
+          fonte:      {tipo: string}
+
+      escalacoes:
+        arquivo: silver/escalacoes.parquet
+        descricao: "Elencos em campo — disponível para temporadas 2024+ (via API)"
+        colunas:
+          partida_id: {tipo: int}
+          temporada:  {tipo: int}
+          rodada:     {tipo: int}
+          clube:      {tipo: string}
+          tecnico:    {tipo: string}
+          formacao:   {tipo: string}
+          atleta:     {tipo: string}
+          num_camisa: {tipo: int}
+          posicao:    {tipo: string}
+          titular:    {tipo: bool,   descricao: "True = titular, False = reserva"}
+          fonte:      {tipo: string}
+
+      classificacao:
+        arquivo: silver/classificacao.parquet
+        descricao: "Tabela de classificação final por temporada (via API — 2024+)"
+        colunas:
+          temporada:   {tipo: int}
+          posicao:     {tipo: int}
+          clube:       {tipo: string}
+          pontos:      {tipo: int}
+          jogos:       {tipo: int}
+          vitorias:    {tipo: int}
+          empates:     {tipo: int}
+          derrotas:    {tipo: int}
+          gols_pro:    {tipo: int}
+          gols_contra: {tipo: int}
+          saldo_gols:  {tipo: int}
+          forma:       {tipo: string, descricao: "Últimos 5 jogos (W/D/L)"}
+          fonte:       {tipo: string}
+
+  gold:
+    descricao: "Tabelas analíticas pré-computadas, prontas para dashboards"
+    tabelas:
+
+      campeonato_historico:
+        arquivo: gold/campeonato_historico.parquet
+        descricao: "Partidas enriquecidas (2003-2026)"
+
+      artilharia_historica:
+        arquivo: gold/artilharia_historica.parquet
+        descricao: "Gols por jogador por temporada (exclui gols contra)"
+
+      desempenho_clubes:
+        arquivo: gold/desempenho_clubes.parquet
+        descricao: "Pontos, vitórias, saldo de gols e aproveitamento por clube/temporada"
+
+      fair_play:
+        arquivo: gold/fair_play.parquet
+        descricao: "Cartões amarelos, vermelhos e score de fair play por clube/temporada"
+
+      classificacao_historica:
+        arquivo: gold/classificacao_historica.parquet
+        descricao: "Tabela de classificação final calculada para todas as temporadas"
+
+      rebaixamento_acesso:
+        arquivo: gold/rebaixamento_acesso.parquet
+        descricao: "Situação final de cada clube: Campeão / Libertadores / Sul-Americana / Rebaixado"
+
+fontes:
+  historico:
+    origem: "Dataset Brasileirao Série A 2003-2023 (Adão Duque — adaoduquesn@gmail.com)"
+    periodo: "2003–2023"
+    qualidade: "Dados esparsas em 2003-2011 (estatísticas ausentes)"
+  api_football:
+    origem: "API-Football via RapidAPI (api-football-v1.p.rapidapi.com)"
+    periodo: "2024–2026 (em andamento)"
+    documentacao: "https://www.api-football.com/documentation-v3"
+    league_id: 71

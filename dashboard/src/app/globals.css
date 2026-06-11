@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+:root {
+  --bg:        #1a1d29;
+  --bg-card:   #222636;
+  --bg-hover:  #2a2f45;
+  --border:    #2d3250;
+  --fg:        #e8eaf6;
+  --muted:     #8b92b3;
+  --accent:    #3d7cf5;
+  --accent-2:  #5c6bc0;
+  --green:     #00d25b;
+  --yellow:    #f5c518;
+  --red:       #e94560;
+  --nav:       #13151f;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── card ─────────────────────────────────────── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+
+.card-sm {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+}
+
+/* ── badges ───────────────────────────────────── */
+.badge-green {
+  background: rgba(0, 210, 91, 0.15);
+  color: var(--green);
+  border-radius: 9999px;
+  padding: 0.125rem 0.625rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.badge-blue {
+  background: rgba(61, 124, 245, 0.15);
+  color: var(--accent);
+  border-radius: 9999px;
+  padding: 0.125rem 0.625rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.badge-red {
+  background: rgba(233, 69, 96, 0.15);
+  color: var(--red);
+  border-radius: 9999px;
+  padding: 0.125rem 0.625rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+/* ── result badges ────────────────────────────── */
+.res-V  { background: rgba(0,210,91,.18);  color:#00d25b; }
+.res-E  { background: rgba(245,197,24,.15); color:#f5c518; }
+.res-D  { background: rgba(233,69,96,.18); color:#e94560; }
+
+/* ── table ────────────────────────────────────── */
+.table-auto th {
+  background: #1a1d29;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  padding: 0.625rem 0.875rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.table-auto td {
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+  color: var(--fg);
+}
+
+.table-auto tr:last-child td { border-bottom: none; }
+
+.table-auto tr:hover td { background: var(--bg-hover); }
+
+/* ── tabs ─────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  gap: 0;
+}
+
+.tab {
+  padding: 0.75rem 1.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.tab:hover { color: var(--fg); }
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── scrollbar ────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-2); }
+
+/* ── recharts dark ────────────────────────────── */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 0.5rem !important;
+  color: var(--fg) !important;
+}
+
+.recharts-cartesian-axis-tick-value { fill: var(--muted); }
