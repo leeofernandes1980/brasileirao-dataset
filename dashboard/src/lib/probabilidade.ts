@@ -164,6 +164,11 @@ export function calcProb(
     dr=dr*(1-mandoW)+((stats1.awayDrawPct+stats2.homeDrawPct)/2)*mandoW;
   }
 
+  // Clamp: probabilidade nunca pode ser negativa
+  t1 = Math.max(t1, 0);
+  dr = Math.max(dr, 0);
+  t2 = Math.max(t2, 0);
+
   const soma = Math.max(t1+dr+t2, .001);
   const vit1 = confrontos.filter(p =>
     (p.mandante===time1&&(p.gols_mandante??0)>(p.gols_visitante??0))||

@@ -82,7 +82,7 @@ body {
   letter-spacing: 0.06em;
   color: var(--muted);
   padding: 0.625rem 0.875rem;
-  text-align: left;
+  text-align: center;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }

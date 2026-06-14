@@ -146,7 +146,7 @@ function JogoCard({ mandante, visitante, prob, str1, str2, form1, form2, h2hTota
 
       {/* link para confronto detalhado */}
       <Link
-        href={`/confrontos?t1=${encodeURIComponent(mandante)}&t2=${encodeURIComponent(visitante)}`}
+        href={`/confrontos?t1=${encodeURIComponent(mandante)}&t2=${encodeURIComponent(visitante)}&mando=t1_casa`}
         className="block text-center text-xs py-1.5 rounded-lg transition-colors"
         style={{
           background: "rgba(61,124,245,.08)",
@@ -176,10 +176,20 @@ export default function RodadaPage() {
     const partidas2026 = partidas.filter(p => p.temporada === 2026);
     const comResultado = partidas.filter(p => p.gols_mandante !== null);
 
-    // Próxima rodada: menor rodada de 2026 com pelo menos 1 jogo não disputado
-    const proxRodada = partidas2026
-      .filter(p => p.gols_mandante === null)
-      .reduce((min, p) => Math.min(min, p.rodada), Infinity);
+    // Próxima rodada: menor rodada de 2026 onde TODOS os jogos ainda não foram disputados
+    // (evita pegar rodadas com jogos adiados/pendentes que já foram em grande parte realizadas)
+    const rodadaStats = new Map<number, { total: number; semResultado: number }>();
+    for (const p of partidas2026) {
+      const s = rodadaStats.get(p.rodada) ?? { total: 0, semResultado: 0 };
+      s.total++;
+      if (p.gols_mandante === null) s.semResultado++;
+      rodadaStats.set(p.rodada, s);
+    }
+    const proxRodada = Math.min(
+      ...Array.from(rodadaStats.entries())
+        .filter(([, s]) => s.semResultado === s.total)
+        .map(([r]) => r)
+    );
 
     if (!isFinite(proxRodada)) return { rodada: 0, jogos: [], jogosComProb: [], maxYear };
 
@@ -189,9 +199,9 @@ export default function RodadaPage() {
 
     const jogosComProb = jogos.map(jogo => {
       const { mandante, visitante } = jogo;
+      // Mesmo filtro que confrontos usa com t1_casa: só jogos onde o mandante jogou em casa
       const confrontos = comResultado.filter(p =>
-        (p.mandante===mandante&&p.visitante===visitante)||
-        (p.mandante===visitante&&p.visitante===mandante)
+        p.mandante === mandante && p.visitante === visitante
       );
       const form1  = recentFormN(comResultado, mandante,  ELENCO_CONFIG.titular.formN);
       const form2  = recentFormN(comResultado, visitante, ELENCO_CONFIG.titular.formN);
@@ -319,11 +329,11 @@ export default function RodadaPage() {
         <table className="table-auto w-full text-sm">
           <thead>
             <tr>
-              <th className="text-left pl-0 min-w-[120px]">Mandante</th>
+              <th className="text-center min-w-[120px]">Mandante</th>
               <th className="w-16 text-center">Casa</th>
               <th className="w-12 text-center">Emp</th>
               <th className="w-16 text-center">Fora</th>
-              <th className="text-right pr-0 min-w-[120px]">Visitante</th>
+              <th className="text-center min-w-[120px]">Visitante</th>
               <th className="w-20 text-center hidden sm:table-cell">H2H</th>
             </tr>
           </thead>
@@ -334,11 +344,12 @@ export default function RodadaPage() {
               const favorite = prob && prob.t1 > prob.t2 ? "t1" : prob && prob.t2 > prob.t1 ? "t2" : "draw";
               return (
                 <tr key={jogo.partida_id}>
-                  <td className="pl-0">
-                    <div className="flex items-center gap-2">
-                      <ClubCrest name={jogo.mandante} size={22} />
+                  <td>
+                    <div className="flex flex-col items-center gap-1 py-1">
+                      <ClubCrest name={jogo.mandante} size={24} />
                       <Link href={`/times/${encodeURIComponent(jogo.mandante)}`}
-                        className="hover:underline font-medium" style={{ color: "var(--fg)" }}>
+                        className="hover:underline font-medium text-center leading-tight text-xs"
+                        style={{ color: "var(--fg)" }}>
                         {jogo.mandante}
                       </Link>
                     </div>
@@ -354,13 +365,14 @@ export default function RodadaPage() {
                     style={{ color: favorite==="t2" ? c2 : "var(--fg)" }}>
                     {prob ? `${prob.t2}%` : "—"}
                   </td>
-                  <td className="pr-0">
-                    <div className="flex items-center gap-2 justify-end">
+                  <td>
+                    <div className="flex flex-col items-center gap-1 py-1">
+                      <ClubCrest name={jogo.visitante} size={24} />
                       <Link href={`/times/${encodeURIComponent(jogo.visitante)}`}
-                        className="hover:underline font-medium" style={{ color: "var(--fg)" }}>
+                        className="hover:underline font-medium text-center leading-tight text-xs"
+                        style={{ color: "var(--fg)" }}>
                         {jogo.visitante}
                       </Link>
-                      <ClubCrest name={jogo.visitante} size={22} />
                     </div>
                   </td>
                   <td className="text-center hidden sm:table-cell">

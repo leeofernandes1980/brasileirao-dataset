@@ -39,7 +39,7 @@ export default function Confrontos() {
   const [time1, setTime1]       = useState(params.get("t1") ?? "");
   const [time2, setTime2]       = useState(params.get("t2") ?? "");
   const [tab, setTab]           = useState<Tab>("Retrospecto");
-  const [mando, setMando]       = useState<Mando>("todos");
+  const [mando, setMando]       = useState<Mando>((params.get("mando") as Mando) ?? "todos");
   const [elenco, setElenco]     = useState<Elenco>("titular");
   const [loading, setLoading]   = useState(true);
 

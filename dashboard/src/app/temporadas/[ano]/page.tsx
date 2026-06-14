@@ -110,7 +110,7 @@ export default function TemporadaPage() {
                       </div>
                     </td>
                     <td className="text-center font-bold" style={{ color: "var(--green)" }}>{c.pontos}</td>
-                    <td className="text-center" style={{ color: "var(--muted)" }}>{c.jogos}</td>
+                    <td className="text-center" style={{ color: "var(--muted)" }}>{c.vitorias + c.empates + c.derrotas}</td>
                     <td className="text-center" style={{ color: "var(--green)" }}>{c.vitorias}</td>
                     <td className="text-center" style={{ color: "var(--yellow)" }}>{c.empates}</td>
                     <td className="text-center" style={{ color: "var(--red)" }}>{c.derrotas}</td>
