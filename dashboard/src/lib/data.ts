@@ -24,6 +24,7 @@ export type Artilharia = {
 };
 export type TemporadaMeta = {
   temporada: number; total_partidas: number;
+  partidas_disputadas: number;
   total_gols: number; inicio: string; fim: string;
 };
 export type Campeao = { temporada: number; clube: string; pontos: number };

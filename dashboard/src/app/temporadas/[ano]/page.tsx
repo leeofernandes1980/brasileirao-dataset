@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getData, type Classificacao, type Partida, type Artilharia } from "@/lib/data";
 import { fmt } from "@/lib/utils";
 import { Trophy, ChevronLeft } from "lucide-react";
+import ClubCrest from "@/components/ClubCrest";
 
 const SITUACAO: Record<string, { label: string; color: string; bg: string }> = {
   "Campeão":       { label: "C", color: "var(--yellow)", bg: "rgba(245,197,24,.15)" },
@@ -101,6 +102,7 @@ export default function TemporadaPage() {
                             {sitStyle.label}
                           </span>
                         )}
+                        <ClubCrest name={c.clube} size={20} />
                         <Link href={`/times/${encodeURIComponent(c.clube)}`}
                           className="hover:underline font-medium" style={{ color: "var(--fg)" }}>
                           {c.clube}
@@ -181,15 +183,17 @@ export default function TemporadaPage() {
                 <div key={p.partida_id}
                   className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm"
                   style={{ background: "var(--bg-hover)" }}>
-                  <span className="flex-1 text-right font-medium truncate pr-2" style={{ color: "var(--fg)" }}>
-                    {p.mandante}
-                  </span>
-                  <span className="font-black tabular-nums px-2 shrink-0 text-base" style={{ color: "var(--fg)" }}>
+                  <div className="flex-1 flex items-center justify-end gap-2 min-w-0">
+                    <span className="font-medium truncate" style={{ color: "var(--fg)" }}>{p.mandante}</span>
+                    <ClubCrest name={p.mandante} size={20} />
+                  </div>
+                  <span className="font-black tabular-nums px-3 shrink-0 text-base" style={{ color: "var(--fg)" }}>
                     {hasResult ? `${gm} × ${gv}` : "– × –"}
                   </span>
-                  <span className="flex-1 font-medium truncate pl-2" style={{ color: "var(--fg)" }}>
-                    {p.visitante}
-                  </span>
+                  <div className="flex-1 flex items-center gap-2 min-w-0">
+                    <ClubCrest name={p.visitante} size={20} />
+                    <span className="font-medium truncate" style={{ color: "var(--fg)" }}>{p.visitante}</span>
+                  </div>
                 </div>
               );
             })}

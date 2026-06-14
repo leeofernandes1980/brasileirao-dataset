@@ -2,13 +2,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { BarChart2, Home, Users, Calendar, Swords, Search } from "lucide-react";
+import { BarChart2, Home, Users, Calendar, Swords, Search, Zap } from "lucide-react";
 
 const links = [
   { href: "/",           label: "Início",     icon: Home },
   { href: "/temporadas", label: "Temporadas", icon: Calendar },
   { href: "/times",      label: "Times",      icon: Users },
   { href: "/confrontos", label: "Confrontos", icon: Swords },
+  { href: "/rodada",     label: "Rodada",     icon: Zap },
   { href: "/consultas",  label: "Consultas",  icon: Search },
 ];
 

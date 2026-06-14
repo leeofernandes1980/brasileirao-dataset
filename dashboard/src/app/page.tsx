@@ -8,6 +8,7 @@ import {
   LineChart, Line, CartesianGrid,
 } from "recharts";
 import { Trophy, Layers, Goal, Shirt, TrendingUp } from "lucide-react";
+import ClubCrest from "@/components/ClubCrest";
 
 function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -42,10 +43,11 @@ export default function Home() {
     </div>
   );
 
-  const totalPartidas = metas.reduce((s, m) => s + m.total_partidas, 0);
-  const totalGols     = metas.reduce((s, m) => s + (m.total_gols || 0), 0);
-  const totalTemps    = metas.length;
-  const mediaGols     = (totalGols / totalPartidas).toFixed(2);
+  const totalPartidas  = metas.reduce((s, m) => s + m.total_partidas, 0);
+  const totalDisputadas = metas.reduce((s, m) => s + (m.partidas_disputadas || m.total_partidas), 0);
+  const totalGols      = metas.reduce((s, m) => s + (m.total_gols || 0), 0);
+  const totalTemps     = metas.length;
+  const mediaGols      = (totalGols / totalDisputadas).toFixed(2);
 
   const titulos: Record<string, number> = {};
   campeoes.forEach(c => { titulos[c.clube] = (titulos[c.clube] || 0) + 1; });
@@ -61,10 +63,10 @@ export default function Home() {
     <div className="space-y-6">
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Temporadas"      value={fmt(totalTemps)}    sub="2003 – 2026" />
-        <KpiCard label="Partidas"        value={fmt(totalPartidas)} sub="todas as edicoes" />
-        <KpiCard label="Gols"            value={fmt(totalGols)}     sub="com detalhes" />
-        <KpiCard label="Media Gols/Jogo" value={mediaGols}          sub="historico geral" />
+        <KpiCard label="Temporadas"      value={fmt(totalTemps)}      sub="2003 – 2026" />
+        <KpiCard label="Partidas"        value={fmt(totalDisputadas)} sub="com resultado" />
+        <KpiCard label="Gols"            value={fmt(totalGols)}       sub="todas as edicoes" />
+        <KpiCard label="Media Gols/Jogo" value={mediaGols}            sub="partidas disputadas" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -78,7 +80,7 @@ export default function Home() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="ano" tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} />
-              <Tooltip {...tooltipStyle} formatter={(v: any) => [fmt(Number(v)), "Gols"]} />
+              <Tooltip {...tooltipStyle} formatter={(v) => [fmt(Number(v)), "Gols"]} />
               <Bar dataKey="gols" fill="var(--accent)" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -94,10 +96,7 @@ export default function Home() {
               <li key={clube} className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="text-xs w-4 text-right" style={{ color: "var(--muted)" }}>{i + 1}</span>
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-                    style={{ background: "var(--accent-2)" }}>
-                    {clube.slice(0, 1)}
-                  </div>
+                  <ClubCrest name={clube} size={24} />
                   <Link href={`/times/${encodeURIComponent(clube)}`}
                     className="text-sm font-medium hover:underline" style={{ color: "var(--fg)" }}>
                     {clube}

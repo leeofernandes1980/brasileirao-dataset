@@ -4,7 +4,13 @@ import Navbar from "@/components/Navbar";
 
 export const metadata: Metadata = {
   title: "Brasileirão Data Lake",
-  description: "Dashboard de estatísticas do Campeonato Brasileiro 2003–2026",
+  description: "Dashboard de estatísticas, probabilidades e histórico do Campeonato Brasileiro 2003–2026",
+  openGraph: {
+    title:       "Brasileirão Data Lake",
+    description: "Estatísticas, probabilidades e histórico do Brasileirão 2003–2026",
+    type:        "website",
+    locale:      "pt_BR",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -17,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </main>
         <footer className="py-4 text-center text-xs"
           style={{ borderTop: "1px solid var(--border)", background: "var(--nav)", color: "var(--muted)" }}>
-          Brasileirao Data Lake · 2003–2026 · Dados: Sofascore
+          Brasileirao Data Lake · 2003–2026 · Dados: Dataset público · Logos: ESPN
         </footer>
       </body>
     </html>

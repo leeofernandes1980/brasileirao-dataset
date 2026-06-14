@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getData, type TemporadaMeta, type Campeao } from "@/lib/data";
 import { fmt } from "@/lib/utils";
 import { Trophy } from "lucide-react";
+import ClubCrest from "@/components/ClubCrest";
 
 export default function Temporadas() {
   const [metas, setMetas]     = useState<TemporadaMeta[]>([]);
@@ -47,17 +48,18 @@ export default function Temporadas() {
                 )}
               </div>
               {campeoes[m.temporada] && m.temporada < 2026 && (
-                <div className="flex items-center gap-1 text-xs font-semibold"
+                <div className="flex items-center gap-1.5 text-xs font-semibold"
                   style={{ color: "var(--yellow)" }}>
                   <Trophy size={12} />
+                  <ClubCrest name={campeoes[m.temporada]} size={18} />
                   {campeoes[m.temporada]}
                 </div>
               )}
             </div>
             <div className="flex gap-4 text-xs" style={{ color: "var(--muted)" }}>
-              <span>{fmt(m.total_partidas)} jogos</span>
+              <span>{fmt(m.partidas_disputadas || m.total_partidas)} jogos</span>
               <span>{fmt(m.total_gols)} gols</span>
-              <span>{m.total_partidas ? (m.total_gols / m.total_partidas).toFixed(2) : "—"} gols/jogo</span>
+              <span>{(m.partidas_disputadas || m.total_partidas) ? (m.total_gols / (m.partidas_disputadas || m.total_partidas)).toFixed(2) : "—"} gols/jogo</span>
             </div>
           </Link>
         ))}

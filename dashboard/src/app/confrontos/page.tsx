@@ -1,232 +1,22 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getData, type Partida } from "@/lib/data";
+import ClubCrest from "@/components/ClubCrest";
+import { getClubColor } from "@/lib/clubs";
+import {
+  DECAY, STR_W, ELENCO_CONFIG,
+  homeAwayStats, recentFormN, teamStrength, calcProb,
+  type Elenco, type Mando, type StrengthResult,
+} from "@/lib/probabilidade";
 
-/* ── constantes ───────────────────────────────────────────── */
-const DECAY   = 0.82;  // decaimento temporal: 18% ao ano (peso de 10 anos atrás ≈ 14%)
-const STR_W   = 0.25;  // 25% do peso final vem da força do elenco atual
-
-const ELENCO_CONFIG = {
-  titular: { formN: 5,  h2hW: 0.55, label: "Titular",  desc: "Confia mais na forma atual"  },
-  misto:   { formN: 8,  h2hW: 0.70, label: "Misto",    desc: "Balanco historico + forma"   },
-  reserva: { formN: 12, h2hW: 0.82, label: "Reserva",  desc: "Prioriza historico e H2H"    },
-} as const;
-type Elenco = keyof typeof ELENCO_CONFIG;
-type Mando  = "todos" | "t1_casa" | "t2_casa";
-const TABS  = ["Retrospecto", "Probabilidade", "Forma", "Historico"] as const;
-type Tab    = typeof TABS[number];
+/* ── constantes locais ────────────────────────────────────── */
+const TABS = ["Retrospecto", "Probabilidade", "Forma", "Historico"] as const;
+type Tab   = typeof TABS[number];
 
 /* ── helpers visuais ──────────────────────────────────────── */
-function teamColor(name: string) {
-  const colors = ["#e94560","#3d7cf5","#00d25b","#f5c518","#b388ff","#ff7043","#26c6da","#66bb6a","#ffa726","#ab47bc"];
-  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
-  return colors[Math.abs(h) % colors.length];
-}
-function initials(name: string) {
-  const p = name.split(/[\s\-]/);
-  return p.length >= 2 ? (p[0][0] + p[p.length-1][0]).toUpperCase() : name.slice(0,2).toUpperCase();
-}
-function TeamAvatar({ name, size=48 }: { name: string; size?: number }) {
-  const c = teamColor(name);
-  return (
-    <div style={{ width:size, height:size, borderRadius:"50%", background:`${c}22`,
-      border:`2px solid ${c}55`, display:"flex", alignItems:"center", justifyContent:"center",
-      fontSize:size*.3, fontWeight:800, color:c, flexShrink:0 }}>
-      {initials(name)}
-    </div>
-  );
-}
 function ResBadge({ r }: { r:"V"|"E"|"D" }) {
   return <span className={`text-xs font-bold w-7 h-7 flex items-center justify-center rounded res-${r}`}>{r}</span>;
-}
-
-/* ── estatísticas de casa/fora com ponderação temporal ───── */
-function homeAwayStats(partidas: Partida[], team: string, maxYear: number) {
-  const home = partidas.filter(p => p.mandante === team);
-  const away = partidas.filter(p => p.visitante === team);
-  let homeW=0, homeD=0, homeL=0, awayW=0, awayD=0, awayL=0;
-  let homeTot=0, awayTot=0;
-  for (const p of home) {
-    const w = Math.pow(DECAY, maxYear - p.temporada);
-    const gm=p.gols_mandante??0, gv=p.gols_visitante??0;
-    if (gm>gv){homeW+=w;}else if(gm===gv){homeD+=w;}else{homeL+=w;}
-    homeTot+=w;
-  }
-  for (const p of away) {
-    const w = Math.pow(DECAY, maxYear - p.temporada);
-    const gm=p.gols_mandante??0, gv=p.gols_visitante??0;
-    if (gv>gm){awayW+=w;}else if(gm===gv){awayD+=w;}else{awayL+=w;}
-    awayTot+=w;
-  }
-  const ht = Math.max(homeTot, 0.001), at = Math.max(awayTot, 0.001);
-  return {
-    homePct:     +(homeW/ht*100).toFixed(1),
-    awayPct:     +(awayW/at*100).toFixed(1),
-    homeDrawPct: +(homeD/ht*100).toFixed(1),
-    awayDrawPct: +(awayD/at*100).toFixed(1),
-    homeW: Math.round(homeW), homeD: Math.round(homeD), homeL: Math.round(homeL),
-    awayW: Math.round(awayW), awayD: Math.round(awayD), awayL: Math.round(awayL),
-    homeTotal: home.length, awayTotal: away.length,
-  };
-}
-
-/* ── forma recente (últimos N jogos da Série A) ──────────── */
-function recentFormN(partidas: Partida[], team: string, n: number) {
-  const jogos = partidas
-    .filter(p => p.mandante === team || p.visitante === team)
-    .sort((a, b) => b.temporada - a.temporada || b.rodada - a.rodada)
-    .slice(0, n);
-  let wins=0, draws=0, losses=0;
-  const results: ("V"|"E"|"D")[] = [];
-  const details: { res:"V"|"E"|"D"; opp:string; gp:number; gc:number; temp:number; rod:number }[] = [];
-  for (const p of jogos) {
-    const gm=p.gols_mandante??0, gv=p.gols_visitante??0;
-    const isHome = p.mandante===team;
-    const gp=isHome?gm:gv, gc=isHome?gv:gm;
-    const opp=isHome?p.visitante:p.mandante;
-    let r: "V"|"E"|"D" = "E";
-    if (gp>gc){r="V";wins++;}else if(gp<gc){r="D";losses++;}else draws++;
-    results.push(r); details.push({res:r, opp, gp, gc, temp:p.temporada, rod:p.rodada});
-  }
-  return { wins, draws, losses, results, details, n: jogos.length };
-}
-
-/* ── MELHORIA 1+2: H2H com ponderação temporal ──────────── */
-function weightedH2H(games: Partida[], time1: string, maxYear: number) {
-  let wWin1=0, wWin2=0, wDraw=0;
-  for (const p of games) {
-    const w = Math.pow(DECAY, maxYear - p.temporada);
-    const gm=p.gols_mandante??0, gv=p.gols_visitante??0;
-    const t1Home = p.mandante === time1;
-    const gp=t1Home?gm:gv, gc=t1Home?gv:gm;
-    if (gp>gc) wWin1+=w; else if(gp<gc) wWin2+=w; else wDraw+=w;
-  }
-  const total = wWin1+wWin2+wDraw || 1;
-  return { pct1: wWin1/total, pct2: wWin2/total, pctDraw: wDraw/total, totalW: total };
-}
-
-/* ── MELHORIA 3: força de elenco pela última temporada Série A */
-type StrengthResult = {
-  score: number;       // 0–1 (força normalizada com penalidade de recência)
-  lastYear: number;    // última temporada na Série A
-  ptsPerGame: number;  // pts/jogo nessa temporada
-  games: number;       // nº de jogos nessa temporada
-  warning: string;     // "" se na Série A este ano, ou aviso
-  stars: number;       // 1–5 estrelas para exibição
-};
-
-function teamStrength(allPartidas: Partida[], team: string, maxYear: number): StrengthResult {
-  const teamGames = allPartidas.filter(p =>
-    (p.mandante===team || p.visitante===team) && p.gols_mandante!==null
-  );
-  if (teamGames.length === 0)
-    return { score: 0.3, lastYear: 0, ptsPerGame: 0, games: 0, warning: "Sem dados", stars: 1 };
-
-  const lastYear = Math.max(...teamGames.map(p => p.temporada));
-  const seasonGames = teamGames.filter(p => p.temporada === lastYear);
-
-  let pts = 0;
-  for (const p of seasonGames) {
-    const gm=p.gols_mandante??0, gv=p.gols_visitante??0;
-    const isHome=p.mandante===team;
-    const gp=isHome?gm:gv, gc=isHome?gv:gm;
-    if(gp>gc) pts+=3; else if(gp===gc) pts+=1;
-  }
-
-  const ptsPerGame = seasonGames.length > 0 ? pts / seasonGames.length : 0;
-  const baseScore  = Math.min(ptsPerGame / 3, 1); // 0–1 (3 pts/jogo = perfeito)
-
-  // Penalidade de recência: cada ano fora da Série A reduz a força
-  const gap = maxYear - lastYear;
-  const recency = gap === 0 ? 1.00
-                : gap === 1 ? 0.82
-                : gap === 2 ? 0.60
-                : gap === 3 ? 0.42
-                :             0.28;
-
-  const score = baseScore * recency;
-
-  const warning = gap === 0 ? ""
-                : gap === 1 ? `Última temp. Série A: ${lastYear}`
-                :             `Fora da Série A desde ${lastYear}`;
-
-  // Estrelas: 1–5 baseado no score
-  const stars = score >= 0.75 ? 5 : score >= 0.58 ? 4 : score >= 0.42 ? 3 : score >= 0.25 ? 2 : 1;
-
-  return { score, lastYear, ptsPerGame: +ptsPerGame.toFixed(2), games: seasonGames.length, warning, stars };
-}
-
-/* ── cálculo de probabilidade (H2H temporal + forma + força) */
-function calcProb(
-  confrontosFiltrados: Partida[],
-  time1: string, time2: string,
-  form1: ReturnType<typeof recentFormN>,
-  form2: ReturnType<typeof recentFormN>,
-  mando: Mando,
-  elenco: Elenco,
-  stats1: ReturnType<typeof homeAwayStats>,
-  stats2: ReturnType<typeof homeAwayStats>,
-  str1: StrengthResult,
-  str2: StrengthResult,
-  maxYear: number,
-) {
-  const { h2hW } = ELENCO_CONFIG[elenco];
-  const total = confrontosFiltrados.length;
-  if (total === 0) return null;
-
-  // 1. H2H com ponderação temporal
-  const h2h = weightedH2H(confrontosFiltrados, time1, maxYear);
-
-  // 2. Forma recente (já é Série A por design do dataset)
-  const tot1 = Math.max(form1.wins+form1.draws+form1.losses, 1);
-  const tot2 = Math.max(form2.wins+form2.draws+form2.losses, 1);
-
-  // Peso H2H vs forma, reservando STR_W para a força
-  const baseW  = 1 - STR_W;          // 75% para H2H + forma
-  const h2hWf  = h2hW * baseW;       // parcela H2H
-  const formWf = (1 - h2hW) * baseW; // parcela forma
-
-  let t1  = h2h.pct1   * h2hWf*100 + (form1.wins /tot1)*100 * formWf;
-  let dr  = h2h.pctDraw* h2hWf*100 + ((form1.draws/tot1 + form2.draws/tot2)/2)*100 * formWf;
-  let t2  = h2h.pct2   * h2hWf*100 + (form2.wins /tot2)*100 * formWf;
-
-  // 3. Fator força: str_ratio indica quão mais forte é o T1 vs T2
-  const strTotal = str1.score + str2.score || 0.001;
-  const strRatio = str1.score / strTotal;  // 0–1; 0.5 = equilíbrio
-  // Transfere massa de probabilidade do mais fraco para o mais forte
-  // Apenas nas vitórias; empates ficam menos afetados
-  const strShift = (strRatio - 0.5) * 2 * STR_W * 100; // -25 a +25 pp
-  t1 += strShift;
-  t2 -= strShift;
-
-  // 4. Fator mando (25% sobre taxa histórica em casa/fora)
-  const mandoW = 0.25;
-  if (mando === "t1_casa") {
-    t1 = t1*(1-mandoW) + stats1.homePct*mandoW;
-    t2 = t2*(1-mandoW) + stats2.awayPct*mandoW;
-    dr = dr*(1-mandoW) + ((stats1.homeDrawPct+stats2.awayDrawPct)/2)*mandoW;
-  } else if (mando === "t2_casa") {
-    t1 = t1*(1-mandoW) + stats1.awayPct*mandoW;
-    t2 = t2*(1-mandoW) + stats2.homePct*mandoW;
-    dr = dr*(1-mandoW) + ((stats1.awayDrawPct+stats2.homeDrawPct)/2)*mandoW;
-  }
-
-  // Normalizar para 100%
-  const soma = Math.max(t1+dr+t2, 0.001);
-  const r = { t1: +(t1/soma*100).toFixed(1), draw: +(dr/soma*100).toFixed(1), t2: +(t2/soma*100).toFixed(1) };
-
-  // Contagens brutas (para retrospecto)
-  const vit1 = confrontosFiltrados.filter(p =>
-    (p.mandante===time1&&(p.gols_mandante??0)>(p.gols_visitante??0))||
-    (p.visitante===time1&&(p.gols_visitante??0)>(p.gols_mandante??0))).length;
-  const vit2 = confrontosFiltrados.filter(p =>
-    (p.mandante===time2&&(p.gols_mandante??0)>(p.gols_visitante??0))||
-    (p.visitante===time2&&(p.gols_visitante??0)>(p.gols_mandante??0))).length;
-  const emps = total - vit1 - vit2;
-
-  return { ...r, vit1, emps, vit2, total,
-    h2h: { pct1:+(h2h.pct1*100).toFixed(1), pctDraw:+(h2h.pctDraw*100).toFixed(1), pct2:+(h2h.pct2*100).toFixed(1), totalW:+h2h.totalW.toFixed(1) },
-  };
 }
 
 /* ── Stars component ─────────────────────────────────────── */
@@ -242,11 +32,12 @@ function StrengthStars({ str }: { str: StrengthResult }) {
 
 /* ── page ─────────────────────────────────────────────────── */
 export default function Confrontos() {
+  const params = useSearchParams();
   const [clubes, setClubes]     = useState<string[]>([]);
   const [partidas, setPartidas] = useState<Partida[]>([]);
   const [maxYear, setMaxYear]   = useState(2026);
-  const [time1, setTime1]       = useState("");
-  const [time2, setTime2]       = useState("");
+  const [time1, setTime1]       = useState(params.get("t1") ?? "");
+  const [time2, setTime2]       = useState(params.get("t2") ?? "");
   const [tab, setTab]           = useState<Tab>("Retrospecto");
   const [mando, setMando]       = useState<Mando>("todos");
   const [elenco, setElenco]     = useState<Elenco>("titular");
@@ -286,8 +77,8 @@ export default function Confrontos() {
     ? calcProb(confrontosFiltrados, time1, time2, form1, form2, mando, elenco, stats1, stats2, str1, str2, maxYear)
     : null;
 
-  const color1 = time1 ? teamColor(time1) : "var(--accent)";
-  const color2 = time2 ? teamColor(time2) : "var(--muted)";
+  const color1 = time1 ? getClubColor(time1) : "var(--accent)";
+  const color2 = time2 ? getClubColor(time2) : "var(--muted)";
 
   const Select = ({ value, onChange, placeholder }: { value:string; onChange:(v:string)=>void; placeholder:string }) => (
     <select value={value} onChange={e => onChange(e.target.value)}
@@ -374,7 +165,7 @@ export default function Confrontos() {
             <div className="flex items-center justify-between mb-6">
               {/* time 1 */}
               <div className="flex flex-col items-center gap-2 text-center flex-1">
-                <TeamAvatar name={time1} size={60} />
+                <ClubCrest name={time1} size={60} />
                 <span className="font-bold text-base" style={{ color:"var(--fg)" }}>{time1}</span>
                 {str1 && (
                   <div className="flex flex-col items-center gap-1">
@@ -413,7 +204,7 @@ export default function Confrontos() {
 
               {/* time 2 */}
               <div className="flex flex-col items-center gap-2 text-center flex-1">
-                <TeamAvatar name={time2} size={60} />
+                <ClubCrest name={time2} size={60} />
                 <span className="font-bold text-base" style={{ color:"var(--fg)" }}>{time2}</span>
                 {str2 && (
                   <div className="flex flex-col items-center gap-1">
@@ -629,7 +420,7 @@ export default function Confrontos() {
                 ] as const).map(({ team, form, color, stats, str }) => (
                   <div key={team}>
                     <div className="flex items-center gap-2 mb-3">
-                      <TeamAvatar name={team} size={28} />
+                      <ClubCrest name={team} size={28} />
                       <span className="font-semibold text-sm" style={{ color:"var(--fg)" }}>{team}</span>
                       {str && <StrengthStars str={str} />}
                     </div>
