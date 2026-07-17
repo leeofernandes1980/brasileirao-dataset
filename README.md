@@ -12,8 +12,8 @@ Dataset completo do Campeonato Brasileiro Série A de 2003 a 2026, com data lake
 | **`datalake/`** | Pipeline ETL em Python — bronze → silver → gold |
 | **`dashboard/`** | Dashboard Next.js 16 com DuckDB-WASM no browser |
 
-**Cobertura:** 2003–2026 · Série A · ~4.600 partidas  
-**Fontes:** Dataset original de Adão Duque (2003–2023) + API-Football via RapidAPI (2024–2026)
+**Cobertura:** 2003–2026 · Série A · 9.500+ partidas  
+**Fontes:** Dataset original de Adão Duque (2003–2023) + API pública do Sofascore, gratuita (2024–2026)
 
 ---
 
@@ -158,15 +158,6 @@ cd datalake
 pip install -r requirements.txt
 ```
 
-### Configuração da API (2024–2026)
-
-```bash
-cp .env.example .env
-# edite .env e preencha API_FOOTBALL_KEY
-```
-
-Chave obtida em [RapidAPI → api-football](https://rapidapi.com/api-sports/api/api-football). O plano gratuito oferece 100 req/dia — suficiente para atualizações semanais com `--fixtures-only`.
-
 ### Executando o Pipeline
 
 ```bash
@@ -174,27 +165,58 @@ cd datalake/pipelines
 
 # Apenas dados históricos 2003–2023 (sem API)
 python run_all.py --skip-api
-
-# Com API — apenas resultados (cota gratuita)
-python run_all.py --fixtures-only
-
-# Com API — dados completos: stats, gols, cartões, escalações (plano pago)
-python run_all.py
 ```
 
-### Atualização Semanal (temporada em andamento)
+### Atualização de Rodada (temporada 2026 em andamento)
+
+O fluxo atual usa `ingest_sofascore.py`, que consome a **API pública gratuita do Sofascore** — sem chave, sem cota, sem custo.
 
 ```bash
 cd datalake/pipelines
 
-# Apenas novos resultados — 6 req (seguro para cota gratuita)
-python update_season.py --fixtures-only --rebuild-gold
+# Partidas + gols/cartões/estatísticas/escalações da temporada 2026
+# (só busca o que ainda não foi salvo — rápido em execuções repetidas)
+python ingest_sofascore.py --seasons 2026
 
-# Com detalhes completos
-python update_season.py --rebuild-gold
+# Só uma rodada específica
+python ingest_sofascore.py --seasons 2026 --round 19
+
+# Depois, reconstrua a camada Gold e exporte para o dashboard
+python build_gold.py
+cd ../../dashboard/scripts && python export_data.py
 ```
 
-No Windows, use `atualizar_rodada.bat` na raiz do projeto.
+No Windows, `atualizar_rodada.bat` (raiz do projeto) faz tudo isso em sequência, incluindo a carga no MySQL local.
+
+#### Atualização automática (GitHub Actions)
+
+O workflow [`.github/workflows/atualizar-rodada.yml`](.github/workflows/atualizar-rodada.yml) roda esse mesmo fluxo na nuvem a cada 3 horas e publica direto no site (commit + push para `main`, o que dispara o deploy no Vercel). Também pode ser disparado manualmente pelo terminal, com o [GitHub CLI](https://cli.github.com/):
+
+```bash
+# Verifica todas as rodadas e atualiza o que houver de novo
+gh workflow run "Atualizar Rodada Brasileirão"
+
+# Atualiza só uma rodada específica
+gh workflow run "Atualizar Rodada Brasileirão" -f rodada=19
+
+# Acompanhar a execução mais recente até o fim
+gh run watch $(gh run list --workflow="Atualizar Rodada Brasileirão" --limit 1 --json databaseId -q '.[0].databaseId') --exit-status
+```
+
+Não precisa de nenhuma chave/segredo — a API do Sofascore usada aqui é pública e gratuita.
+
+### Pipeline legado via RapidAPI (opcional)
+
+`run_all.py` e `update_season.py` usam a [API-Football via RapidAPI](https://rapidapi.com/api-sports/api/api-football) (plano gratuito: 100 req/dia) em vez do Sofascore. Não é o fluxo usado pelo `.bat` nem pela GitHub Action, mas continua disponível como alternativa:
+
+```bash
+cp datalake/.env.example datalake/.env
+# edite .env e preencha API_FOOTBALL_KEY
+
+cd datalake/pipelines
+python update_season.py --fixtures-only --rebuild-gold   # só resultados
+python update_season.py --rebuild-gold                   # com stats, gols, cartões, escalações
+```
 
 ### Consultas com DuckDB (Python)
 
@@ -291,7 +313,7 @@ O deploy é feito pela Vercel apontando para a pasta `dashboard/`. Os arquivos e
 ## Fontes
 
 - **2003–2023:** Dataset original de Adão Duque
-- **2024–2026:** [API-Football](https://www.api-football.com) via RapidAPI (Liga ID: `71`)
+- **2024–2026:** [Sofascore](https://www.sofascore.com) (API pública, gratuita) — torneio `325`. Alternativa via [API-Football](https://www.api-football.com)/RapidAPI (Liga ID: `71`) também disponível.
 
 ---
 
