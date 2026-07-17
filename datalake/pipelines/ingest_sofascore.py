@@ -79,6 +79,15 @@ def ingest_match_details(all_events: list[tuple]) -> None:
         (ev, s, rd) for ev, s, rd in all_events
         if ev.get("status", {}).get("type") == "finished"
     ]
+
+    stats_path = SILVER_DIR / "estatisticas.parquet"
+    if stats_path.exists():
+        done_ids = set(pd.read_parquet(stats_path, columns=["partida_id"])["partida_id"].tolist())
+        before = len(finished)
+        finished = [(ev, s, rd) for ev, s, rd in finished if ev["id"] not in done_ids]
+        if before - len(finished):
+            log.info("  %d partidas já com detalhes salvos — pulando", before - len(finished))
+
     log.info("Buscando detalhes de %d partidas concluídas...", len(finished))
 
     for ev, season, rd in tqdm(finished, desc="Detalhes"):

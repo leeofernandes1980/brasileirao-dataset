@@ -54,6 +54,11 @@ _INTERVAL_PUBLIC = 1.5   # seg entre chamadas API pública
 _CACHE_DIR = Path(__file__).parent.parent / "bronze" / "api_cache"
 _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
+# Circuit breaker: após vários bloqueios seguidos, assume que o IP está
+# temporariamente bloqueado e para de esperar/reter — só tenta uma vez.
+_MAX_CONSECUTIVE_BLOCKS = 3
+_consecutive_blocks = 0
+
 
 # ── helpers de cache ──────────────────────────────────────────────────────
 
@@ -95,6 +100,8 @@ def _get_public(path: str) -> dict:
     log.info("Public GET %s", url)
     time.sleep(_INTERVAL_PUBLIC)
 
+    global _consecutive_blocks
+
     r = requests.get(url, headers=_HDR_PUBLIC, timeout=30)
 
     if r.status_code == 404:
@@ -102,14 +109,20 @@ def _get_public(path: str) -> dict:
         return {}
 
     if r.status_code in (429, 403):
+        if _consecutive_blocks >= _MAX_CONSECUTIVE_BLOCKS:
+            log.warning("%d em %s — IP provavelmente bloqueado, pulando sem retry", r.status_code, path)
+            return {}
+
         wait = 30 if r.status_code == 429 else 15
         log.warning("%d em %s — aguardando %ds e tentando novamente...", r.status_code, path, wait)
         time.sleep(wait)
         r = requests.get(url, headers=_HDR_PUBLIC, timeout=30)
         if r.status_code in (403, 404, 429):
+            _consecutive_blocks += 1
             log.warning("%d persistente — ignorando %s (rodada indisponível ou bloqueada)", r.status_code, path)
             return {}
 
+    _consecutive_blocks = 0
     r.raise_for_status()
     data = r.json()
     cache.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -130,9 +143,23 @@ def get_rounds(season: int) -> list[int]:
 
 
 def get_matches(season: int, round_: int) -> list[dict]:
-    """Retorna partidas de uma rodada via API publica (10 partidas por rodada)."""
+    """Retorna partidas de uma rodada via API publica (10 partidas por rodada).
+
+    Rodadas com jogos ainda não finalizados nunca usam cache velho: o cache
+    é descartado e a rodada é buscada de novo, para não ficar presa em
+    "notstarted"/placar antigo depois que os jogos começam ou terminam.
+    """
     sid = SEASON_IDS[season]
     path = f"unique-tournament/{TOURNAMENT_ID}/season/{sid}/events/round/{round_}"
+    slug = path.strip("/").replace("/", "_").replace("{", "").replace("}", "")
+    cache = _cache_path("pub", slug)
+
+    if cache.exists():
+        cached_events = json.loads(cache.read_text(encoding="utf-8")).get("events", [])
+        if cached_events and all(ev.get("status", {}).get("type") == "finished" for ev in cached_events):
+            return cached_events
+        cache.unlink()
+
     data = _get_public(path)
     return data.get("events", [])
 
