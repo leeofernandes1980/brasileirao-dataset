@@ -123,6 +123,7 @@ export_json("temporadas_meta", f"""
     SELECT
         temporada,
         COUNT(*) AS total_partidas,
+        COUNT(*) FILTER (WHERE gols_mandante IS NOT NULL) AS partidas_disputadas,
         SUM(CASE WHEN gols_mandante IS NOT NULL THEN gols_mandante + gols_visitante ELSE 0 END) AS total_gols,
         MIN(CAST(data AS VARCHAR)) AS inicio,
         MAX(CAST(data AS VARCHAR)) AS fim
