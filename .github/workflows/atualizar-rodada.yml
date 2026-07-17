@@ -1,0 +1,64 @@
+name: Atualizar Rodada Brasileirão
+
+on:
+  schedule:
+    # A cada 3 horas (UTC). Ajuste conforme os horários dos jogos.
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      rodada:
+        description: "Rodada específica para atualizar (vazio = verifica todas)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: atualizar-rodada
+  cancel-in-progress: false
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: pip install -r datalake/requirements.txt
+
+      - name: Ingestão Sofascore (partidas + gols/cartões/estatísticas)
+        working-directory: datalake/pipelines
+        env:
+          RODADA: ${{ github.event.inputs.rodada }}
+        run: |
+          if [ -n "$RODADA" ]; then
+            python -W ignore ingest_sofascore.py --seasons 2026 --round "$RODADA"
+          else
+            python -W ignore ingest_sofascore.py --seasons 2026
+          fi
+
+      - name: Reconstruir camada Gold
+        working-directory: datalake/pipelines
+        run: python -W ignore build_gold.py
+
+      - name: Exportar dados para o dashboard
+        working-directory: dashboard/scripts
+        run: python -W ignore export_data.py
+
+      - name: Commit e push se houver dados novos
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add datalake/silver datalake/gold dashboard/public/data
+          if git diff --cached --quiet; then
+            echo "Nenhuma mudança nos dados — nada para publicar."
+          else
+            git commit -m "data: atualização automática de rodada (GitHub Actions)"
+            git pull --rebase origin main
+            git push
+          fi
