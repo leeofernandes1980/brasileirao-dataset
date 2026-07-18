@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: atualizar-rodada
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   atualizar:
@@ -57,8 +57,26 @@ jobs:
           git add datalake/silver datalake/gold dashboard/public/data
           if git diff --cached --quiet; then
             echo "Nenhuma mudança nos dados — nada para publicar."
-          else
-            git commit -m "data: atualização automática de rodada (GitHub Actions)"
-            git pull --rebase origin main
-            git push
+            exit 0
           fi
+          git commit -m "data: atualização automática de rodada (GitHub Actions)"
+
+          # Os arquivos gerados (parquet/json) mudam a cada execução, então em
+          # caso de corrida com outro run só existe conflito de conteúdo
+          # binário/derivado — resolvemos sempre a favor da versão que acabamos
+          # de gerar (-X ours) em vez de deixar o push falhar.
+          for tentativa in 1 2 3 4 5; do
+            git fetch origin main
+            if git merge -X ours --no-edit origin/main; then
+              if git push origin HEAD:main; then
+                exit 0
+              fi
+            else
+              git merge --abort || true
+            fi
+            echo "Push falhou (tentativa $tentativa/5), tentando novamente..."
+            sleep $((RANDOM % 10 + 5))
+          done
+
+          echo "::error::Não foi possível publicar os dados após 5 tentativas."
+          exit 1
