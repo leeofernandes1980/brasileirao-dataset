@@ -27,12 +27,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Instalar dependências
-        run: pip install -r datalake/requirements.txt
+        run: py -3.12 -m pip install -r datalake/requirements.txt
 
       - name: Ingestão Sofascore (partidas + gols/cartões/estatísticas)
         working-directory: datalake/pipelines
@@ -40,18 +36,18 @@ jobs:
           RODADA: ${{ github.event.inputs.rodada }}
         run: |
           if [ -n "$RODADA" ]; then
-            python -W ignore ingest_sofascore.py --seasons 2026 --round "$RODADA"
+            py -3.12 -W ignore ingest_sofascore.py --seasons 2026 --round "$RODADA"
           else
-            python -W ignore ingest_sofascore.py --seasons 2026
+            py -3.12 -W ignore ingest_sofascore.py --seasons 2026
           fi
 
       - name: Reconstruir camada Gold
         working-directory: datalake/pipelines
-        run: python -W ignore build_gold.py
+        run: py -3.12 -W ignore build_gold.py
 
       - name: Exportar dados para o dashboard
         working-directory: dashboard/scripts
-        run: python -W ignore export_data.py
+        run: py -3.12 -W ignore export_data.py
 
       - name: Commit e push se houver dados novos
         run: |
