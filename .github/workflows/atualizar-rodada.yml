@@ -20,7 +20,10 @@ concurrency:
 
 jobs:
   atualizar:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, windows, brasileirao]
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
