@@ -50,8 +50,8 @@ jobs:
         run: py -3.12 -W ignore export_data.py
 
       - name: Commit e push se houver dados novos
-        working-directory: ${{ github.workspace }}
         run: |
+          cd "$GITHUB_WORKSPACE"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add datalake/silver datalake/gold dashboard/public/data
