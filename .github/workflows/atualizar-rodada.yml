@@ -2,8 +2,9 @@ name: Atualizar Rodada Brasileirão
 
 on:
   schedule:
-    # A cada 3 horas (UTC). Ajuste conforme os horários dos jogos.
-    - cron: "0 */3 * * *"
+    # A cada 12 horas (UTC). Reduzido de 3/3h para poupar a API do Sofascore
+    # enquanto o bloqueio 403 persistir (ver checkpoint de troubleshooting).
+    - cron: "0 */12 * * *"
   workflow_dispatch:
     inputs:
       rodada:
@@ -21,6 +22,7 @@ concurrency:
 jobs:
   atualizar:
     runs-on: [self-hosted, windows, brasileirao]
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
@@ -51,7 +53,6 @@ jobs:
 
       - name: Commit e push se houver dados novos
         run: |
-          cd "$GITHUB_WORKSPACE"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add datalake/silver datalake/gold dashboard/public/data
