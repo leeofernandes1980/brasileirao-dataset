@@ -70,7 +70,26 @@ jobs:
         run: py -3.12 -W ignore export_data.py
 
       - name: Commit e push se houver dados novos
+        working-directory: .
         run: |
+          # Defesa extra: se GIT_DIR/GIT_WORK_TREE estiverem setadas com
+          # valor inválido (vazadas de algum outro processo do runner),
+          # o git ignora cwd/working-directory e falha com "not in a git
+          # directory" em qualquer diretório — isso explicaria por que as
+          # duas tentativas anteriores (working-directory explícito e cd)
+          # deram o mesmo erro.
+          unset GIT_DIR GIT_WORK_TREE GIT_CEILING_DIRECTORIES GIT_INDEX_FILE
+
+          echo "--- diagnóstico ---"
+          echo "pwd: $(pwd)"
+          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
+          echo "git: $(which git) — $(git --version)"
+          echo "variáveis GIT_*/GITHUB_WORKSPACE/GITHUB_REPOSITORY no ambiente:"
+          env | grep -iE '^(GIT_|GITHUB_WORKSPACE|GITHUB_REPOSITORY)=' || echo "(nenhuma)"
+          echo "conteúdo do diretório atual:"
+          ls -la | head -15
+          echo "--- fim diagnóstico ---"
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add datalake/silver datalake/gold dashboard/public/data
