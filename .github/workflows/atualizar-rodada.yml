@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       rodada:
-        description: "Rodada específica para atualizar (vazio = verifica todas)"
+        description: "Rodada específica (vazio = detecta a rodada atual automaticamente; 'todas' = varre o campeonato inteiro)"
         required: false
         type: string
 
@@ -32,15 +32,33 @@ jobs:
       - name: Instalar dependências
         run: py -3.12 -m pip install -r datalake/requirements.txt
 
+      - name: Determinar rodada atual
+        if: github.event.inputs.rodada == ''
+        working-directory: datalake/pipelines
+        continue-on-error: true  # falha aqui não deve travar a run — cai no scan completo
+        run: |
+          RODADA_ATUAL=$(py -3.12 -W ignore rodada_atual.py --seasons 2026)
+          echo "Rodada atual detectada: $RODADA_ATUAL"
+          echo "RODADA_ATUAL=$RODADA_ATUAL" >> "$GITHUB_ENV"
+
       - name: Ingestão Sofascore (partidas + gols/cartões/estatísticas)
         working-directory: datalake/pipelines
         env:
           RODADA: ${{ github.event.inputs.rodada }}
         run: |
-          if [ -n "$RODADA" ]; then
-            py -3.12 -W ignore ingest_sofascore.py --seasons 2026 --round "$RODADA"
-          else
+          # Roda agendada / sem input manual: busca só a rodada atual
+          # (detectada no step anterior) em vez de varrer o campeonato
+          # inteiro — evita disparar o rate-limit/403 do Sofascore.
+          # 'todas' força o scan completo (uso manual/depuração).
+          if [ "$RODADA" = "todas" ]; then
             py -3.12 -W ignore ingest_sofascore.py --seasons 2026
+          else
+            ALVO="${RODADA:-$RODADA_ATUAL}"
+            if [ -n "$ALVO" ]; then
+              py -3.12 -W ignore ingest_sofascore.py --seasons 2026 --round "$ALVO"
+            else
+              py -3.12 -W ignore ingest_sofascore.py --seasons 2026
+            fi
           fi
 
       - name: Reconstruir camada Gold
