@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       rodada:
-        description: "Rodada específica (vazio = detecta a rodada atual automaticamente; 'todas' = varre o campeonato inteiro)"
+        description: "Rodada específica (vazio = detecta automaticamente todas as rodadas pendentes; 'todas' = varre o campeonato inteiro)"
         required: false
         type: string
 
@@ -41,33 +41,39 @@ jobs:
       - name: Instalar dependências
         run: py -3.12 -m pip install -r datalake/requirements.txt
 
-      - name: Determinar rodada atual
+      - name: Determinar rodadas pendentes
         if: github.event.inputs.rodada == ''
         working-directory: datalake/pipelines
-        continue-on-error: true  # falha aqui não deve travar a run — cai no scan completo
+        continue-on-error: true  # falha aqui não deve travar a run — só não busca nada nesta execução
         run: |
-          RODADA_ATUAL=$(py -3.12 -W ignore rodada_atual.py --seasons 2026)
-          echo "Rodada atual detectada: $RODADA_ATUAL"
-          echo "RODADA_ATUAL=$RODADA_ATUAL" >> "$GITHUB_ENV"
+          # "Pendente" = qualquer partida marcada "notstarted" com data já
+          # passada — cobre a rodada da semana E qualquer rodada anterior
+          # que ficou pra trás (jogo remarcado, atraso de captura etc.),
+          # sem depender de qual rodada "parece" ser a atual.
+          RODADAS=$(py -3.12 -W ignore rodada_atual.py --seasons 2026)
+          echo "Rodadas pendentes detectadas: ${RODADAS:-<nenhuma>}"
+          echo "RODADAS_PENDENTES=$RODADAS" >> "$GITHUB_ENV"
 
       - name: Ingestão Sofascore (partidas + gols/cartões/estatísticas)
         working-directory: datalake/pipelines
         env:
           RODADA: ${{ github.event.inputs.rodada }}
         run: |
-          # Roda agendada / sem input manual: busca só a rodada atual
-          # (detectada no step anterior) em vez de varrer o campeonato
-          # inteiro — evita disparar o rate-limit/403 do Sofascore.
-          # 'todas' força o scan completo (uso manual/depuração).
-          if [ "$RODADA" = "todas" ]; then
+          # Roda agendada / sem input manual: busca só as rodadas com
+          # partida pendente (detectadas no step anterior) em vez de
+          # varrer o campeonato inteiro — evita disparar o rate-limit/403
+          # do Sofascore. 'todas' força o scan completo (uso manual/depuração).
+          if [ "$RODADA" = "todas" ] || [ "$RODADAS_PENDENTES" = "todas" ]; then
             py -3.12 -W ignore ingest_sofascore.py --seasons 2026
+          elif [ -n "$RODADA" ]; then
+            py -3.12 -W ignore ingest_sofascore.py --seasons 2026 --round "$RODADA"
+          elif [ -n "$RODADAS_PENDENTES" ]; then
+            for r in $RODADAS_PENDENTES; do
+              echo "== Buscando rodada $r =="
+              py -3.12 -W ignore ingest_sofascore.py --seasons 2026 --round "$r"
+            done
           else
-            ALVO="${RODADA:-$RODADA_ATUAL}"
-            if [ -n "$ALVO" ]; then
-              py -3.12 -W ignore ingest_sofascore.py --seasons 2026 --round "$ALVO"
-            else
-              py -3.12 -W ignore ingest_sofascore.py --seasons 2026
-            fi
+            echo "Nenhuma rodada pendente — nada a buscar nesta execução."
           fi
 
       - name: Reconstruir camada Gold
