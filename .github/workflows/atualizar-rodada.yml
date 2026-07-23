@@ -64,6 +64,10 @@ jobs:
         env:
           RODADA: ${{ github.event.inputs.rodada }}
           SOFASCORE_RAPIDAPI_FALLBACK: ${{ github.event.inputs.fallback_rapidapi == 'true' && '1' || '' }}
+          # secret (não arquivo .env) porque actions/checkout roda "git clean
+          # -ffdx" antes de cada run, apagando qualquer .env não versionado
+          # que sobrasse no workspace do runner self-hosted.
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
           # Roda agendada / sem input manual: busca só as rodadas com
           # partida pendente (detectadas no step anterior) em vez de
