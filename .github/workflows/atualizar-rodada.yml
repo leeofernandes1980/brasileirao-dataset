@@ -76,6 +76,22 @@ jobs:
             echo "Nenhuma rodada pendente — nada a buscar nesta execução."
           fi
 
+      - name: Verificar se a ingestão trouxe dados novos
+        # A ingestão engole 403/429 do Sofascore como skip silencioso (pra não
+        # travar a run com um bloqueio temporário de terceiro) — então a run
+        # pode ficar 100% verde sem ter buscado nenhum dado novo, mascarando
+        # o problema. Este step só reconfere se as rodadas que estavam
+        # pendentes antes da ingestão continuam pendentes depois: se sim,
+        # é sinal de bloqueio persistente (não de "nada pra buscar mesmo").
+        if: env.RODADAS_PENDENTES != '' && env.RODADAS_PENDENTES != 'todas'
+        working-directory: datalake/pipelines
+        continue-on-error: true
+        run: |
+          AINDA_PENDENTES=$(py -3.12 -W ignore rodada_atual.py --seasons 2026)
+          if [ -n "$AINDA_PENDENTES" ]; then
+            echo "::warning::Rodada(s) detectada(s) como pendente(s) antes da ingestão ($RODADAS_PENDENTES) continuam sem resultado depois (ainda pendente(s): $AINDA_PENDENTES). Provável bloqueio 403 do Sofascore no IP deste runner — veja o log do step 'Ingestão Sofascore'. O commit desta run (se houver) não contém os placares dessas partidas."
+          fi
+
       - name: Reconstruir camada Gold
         working-directory: datalake/pipelines
         run: py -3.12 -W ignore build_gold.py
