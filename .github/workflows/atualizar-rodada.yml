@@ -11,6 +11,11 @@ on:
         description: "Rodada específica (vazio = detecta automaticamente todas as rodadas pendentes; 'todas' = varre o campeonato inteiro)"
         required: false
         type: string
+      fallback_rapidapi:
+        description: "Usar fallback RapidAPI (SportAPI) se o Sofascore bloquear com 403 — cota gratuita de só 50 req/mês, ligar apenas quando necessário"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -58,6 +63,7 @@ jobs:
         working-directory: datalake/pipelines
         env:
           RODADA: ${{ github.event.inputs.rodada }}
+          SOFASCORE_RAPIDAPI_FALLBACK: ${{ github.event.inputs.fallback_rapidapi == 'true' && '1' || '' }}
         run: |
           # Roda agendada / sem input manual: busca só as rodadas com
           # partida pendente (detectadas no step anterior) em vez de

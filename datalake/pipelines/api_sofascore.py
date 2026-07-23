@@ -8,8 +8,13 @@ Endpoints:
     /event/{id}/lineups                                   → escalações
     /event/{id}/incidents                                 → gols/cartões
 
-  RapidAPI (sofascore.p.rapidapi.com) — usado como fallback:
-    /tournaments/get-rounds                               → lista de rodadas
+  RapidAPI "SportAPI" (sportapi7.p.rapidapi.com) — espelho 1:1 da API pública
+  acima (mesmos paths, mesmo JSON), usado como fallback só quando a API
+  pública bloqueia com 403 persistente (IP do runner "queimado"). Plano
+  gratuito é limitado a 50 requisições/MÊS (bem mais escasso que a API
+  pública), então o fallback só é usado para o essencial — rodadas/placares
+  (`get_rounds`/`get_matches`) — e nunca para estatísticas/escalações, e
+  fica desligado por padrão (variável SOFASCORE_RAPIDAPI_FALLBACK=1).
 """
 import json, time, logging, os
 import truststore; truststore.inject_into_ssl()
@@ -21,11 +26,12 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 log = logging.getLogger(__name__)
 
-# ── RapidAPI (rounds, statistics fallback) ─────────────────────────────────
+# ── RapidAPI "SportAPI" (fallback pontual quando a API pública bloqueia) ────
 _KEY  = os.getenv("API_FOOTBALL_KEY", "")
-_HOST = "sofascore.p.rapidapi.com"
-_BASE = "https://sofascore.p.rapidapi.com"
+_HOST = "sportapi7.p.rapidapi.com"
+_BASE = "https://sportapi7.p.rapidapi.com/api/v1"
 _HDR  = {"x-rapidapi-key": _KEY, "x-rapidapi-host": _HOST}
+_RAPIDAPI_FALLBACK_ENABLED = os.getenv("SOFASCORE_RAPIDAPI_FALLBACK", "") == "1"
 
 # ── API pública Sofascore ──────────────────────────────────────────────────
 _BASE_PUBLIC = "https://api.sofascore.com/api/v1"
@@ -67,21 +73,26 @@ def _cache_path(prefix: str, slug: str, **params) -> Path:
     return _CACHE_DIR / f"{prefix}__{slug}__{pstr}.json"
 
 
-def _get(path: str, **params) -> dict:
-    """Chama RapidAPI Sofascore com cache."""
-    if not _KEY:
-        raise RuntimeError("RAPIDAPI_KEY nao definida no .env (variavel API_FOOTBALL_KEY)")
+def _rapidapi_fallback_allowed(path: str) -> bool:
+    """Só rodadas/placares passam pelo fallback pago — cota é de 50/mês,
+    não dá pra gastar com estatísticas/incidentes/escalações por partida."""
+    return path.strip("/").startswith("unique-tournament/")
+
+
+def _get_via_rapidapi(path: str) -> dict:
+    """Chama o mesmo path via proxy RapidAPI "SportAPI" (sportapi7), com
+    cache próprio. Usado só como fallback pontual — ver módulo docstring."""
     slug = path.strip("/").replace("/", "_")
-    cache = _cache_path("sfs", slug, **params)
+    cache = _cache_path("rapid", slug)
     if cache.exists():
-        log.debug("cache hit: %s", cache.name)
+        log.debug("cache hit (rapid): %s", cache.name)
         return json.loads(cache.read_text(encoding="utf-8"))
 
     url = f"{_BASE}/{path.lstrip('/')}"
-    log.info("RapidAPI GET %-40s  params=%s", path, params)
+    log.info("RapidAPI (fallback) GET %s", path)
     time.sleep(_INTERVAL_RAPID)
 
-    r = requests.get(url, headers=_HDR, params=params, timeout=30)
+    r = requests.get(url, headers=_HDR, timeout=30)
     r.raise_for_status()
     data = r.json()
     cache.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -89,7 +100,11 @@ def _get(path: str, **params) -> dict:
 
 
 def _get_public(path: str) -> dict:
-    """Chama api.sofascore.com (API pública) com cache. Retorna {} em 404."""
+    """Chama api.sofascore.com (API pública) com cache. Retorna {} em 404.
+
+    Em bloqueio 403 persistente, tenta o fallback RapidAPI (se habilitado e
+    o path for elegível — ver `_rapidapi_fallback_allowed`) antes de desistir.
+    """
     slug = path.strip("/").replace("/", "_").replace("{", "").replace("}", "")
     cache = _cache_path("pub", slug)
     if cache.exists():
@@ -102,6 +117,19 @@ def _get_public(path: str) -> dict:
 
     global _consecutive_blocks
 
+    def _fallback_or_empty() -> dict:
+        if _RAPIDAPI_FALLBACK_ENABLED and _KEY and _rapidapi_fallback_allowed(path):
+            log.warning("Tentando fallback RapidAPI (SportAPI) para %s...", path)
+            try:
+                data = _get_via_rapidapi(path)
+                # também grava no cache "pub" — evita reter (e regravar cota)
+                # se o mesmo path for pedido de novo ainda nesta execução.
+                cache.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+                return data
+            except Exception as exc:
+                log.warning("Fallback RapidAPI também falhou em %s: %s", path, exc)
+        return {}
+
     r = requests.get(url, headers=_HDR_PUBLIC, timeout=30)
 
     if r.status_code == 404:
@@ -111,7 +139,7 @@ def _get_public(path: str) -> dict:
     if r.status_code in (429, 403):
         if _consecutive_blocks >= _MAX_CONSECUTIVE_BLOCKS:
             log.warning("%d em %s — IP provavelmente bloqueado, pulando sem retry", r.status_code, path)
-            return {}
+            return _fallback_or_empty()
 
         wait = 30 if r.status_code == 429 else 15
         log.warning("%d em %s — aguardando %ds e tentando novamente...", r.status_code, path, wait)
@@ -120,7 +148,7 @@ def _get_public(path: str) -> dict:
         if r.status_code in (403, 404, 429):
             _consecutive_blocks += 1
             log.warning("%d persistente — ignorando %s (rodada indisponível ou bloqueada)", r.status_code, path)
-            return {}
+            return _fallback_or_empty()
 
     _consecutive_blocks = 0
     r.raise_for_status()
