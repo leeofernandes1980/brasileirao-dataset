@@ -36,6 +36,27 @@ def _upsert(path: Path, new_df: pd.DataFrame, keys: list[str]) -> None:
     log.info("  %-30s  total=%d  (novos=%d)", path.name, len(combined), len(new_df))
 
 
+def _drop_superseded_postponed(path: Path) -> None:
+    """Remove placeholders "postponed" de partidas remarcadas.
+
+    Quando a CBF remarca uma partida adiada, o Sofascore emite um novo
+    partida_id pro confronto reagendado — o placeholder antigo (sem placar)
+    nunca é atualizado nem some sozinho, então ficaria duplicado para sempre
+    junto do jogo real. Aqui identificamos o par pela mesma
+    (temporada, rodada, mandante, visitante) e descartamos a linha
+    "postponed" quando já existe outra linha não-"postponed" pro mesmo jogo.
+    """
+    df = pd.read_parquet(path)
+    fixture_keys = ["temporada", "rodada", "mandante", "visitante"]
+    tem_substituto = df["status"].ne("postponed").groupby(
+        [df[k] for k in fixture_keys]
+    ).transform("any")
+    stale = df["status"].eq("postponed") & tem_substituto
+    if stale.any():
+        log.info("  %-30s  removendo %d placeholder(s) 'postponed' já remarcado(s)", path.name, int(stale.sum()))
+        df[~stale].to_parquet(path, index=False, engine="pyarrow")
+
+
 # ── ingestão de partidas (results) ───────────────────────────────────────────
 
 def ingest_season_fixtures(season: int, only_round: int | None = None) -> list[dict]:
@@ -65,7 +86,9 @@ def ingest_season_fixtures(season: int, only_round: int | None = None) -> list[d
         df["partida_id"]    = pd.to_numeric(df["partida_id"],    errors="coerce").astype("Int64")
         df["gols_mandante"] = pd.to_numeric(df["gols_mandante"], errors="coerce").astype("Int64")
         df["gols_visitante"]= pd.to_numeric(df["gols_visitante"],errors="coerce").astype("Int64")
-        _upsert(SILVER_DIR / "partidas.parquet", df, keys=["partida_id"])
+        partidas_path = SILVER_DIR / "partidas.parquet"
+        _upsert(partidas_path, df, keys=["partida_id"])
+        _drop_superseded_postponed(partidas_path)
 
     return all_events
 

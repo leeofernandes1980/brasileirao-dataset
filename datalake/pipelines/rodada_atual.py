@@ -5,12 +5,13 @@ essas rodadas na API em vez de varrer o campeonato inteiro (o que dispara o
 rate-limit/403 do Sofascore).
 
 Critério: qualquer partida com status "notstarted" cuja data já passou —
-ou seja, que já deveria ter sido jogada mas ainda não temos o resultado.
-Isso cobre tanto a rodada em disputa nesta semana quanto qualquer rodada
-anterior que ficou pra trás (jogo remarcado, atraso de captura etc.), sem
-depender de "qual rodada tem mais jogos perto de hoje". Partidas
-"postponed" sem nova data são ignoradas (não são uma pendência acionável
-ainda) e partidas "finished" obviamente também.
+ou seja, que já deveria ter sido jogada mas ainda não temos o resultado —
+ou com status "postponed" (a CBF pode remarcar e a partida ser disputada
+sem que a gente saiba a nova data com antecedência; só voltando a checar
+a rodada é que descobrimos se já foi jogada). Isso cobre tanto a rodada em
+disputa nesta semana quanto qualquer rodada anterior que ficou pra trás
+(jogo remarcado, atraso de captura etc.), sem depender de "qual rodada tem
+mais jogos perto de hoje". Partidas "finished" obviamente não entram.
 
 Uso:
     python rodada_atual.py --seasons 2026
@@ -39,7 +40,7 @@ def rodadas_pendentes(season: int, hoje: pd.Timestamp | None = None) -> list[int
         return None
 
     hoje = hoje or pd.Timestamp.now().normalize()
-    pendentes = df[(df["status"] == "notstarted") & (df["data"] <= hoje)]
+    pendentes = df[df["status"].isin(["notstarted", "postponed"]) & (df["data"] <= hoje)]
     return sorted(int(r) for r in pendentes["rodada"].unique())
 
 
