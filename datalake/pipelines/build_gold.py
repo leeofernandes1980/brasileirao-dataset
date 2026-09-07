@@ -200,7 +200,9 @@ def build_classificacao_historica(con: duckdb.DuckDBPyConnection) -> None:
                         SUM(CASE WHEN gols_mandante = gols_visitante THEN 1 ELSE 0 END) empates,
                         SUM(CASE WHEN gols_mandante < gols_visitante THEN 1 ELSE 0 END) derrotas,
                         SUM(gols_mandante) gols_pro, SUM(gols_visitante) gols_contra
-                    FROM {_silver('partidas')} GROUP BY temporada, mandante
+                    FROM {_silver('partidas')}
+                    WHERE gols_mandante IS NOT NULL AND gols_visitante IS NOT NULL
+                    GROUP BY temporada, mandante
                     UNION ALL
                     SELECT temporada, visitante AS clube,
                         COUNT(*) jogos,
@@ -208,7 +210,9 @@ def build_classificacao_historica(con: duckdb.DuckDBPyConnection) -> None:
                         SUM(CASE WHEN gols_visitante = gols_mandante THEN 1 ELSE 0 END) empates,
                         SUM(CASE WHEN gols_visitante < gols_mandante THEN 1 ELSE 0 END) derrotas,
                         SUM(gols_visitante) gols_pro, SUM(gols_mandante) gols_contra
-                    FROM {_silver('partidas')} GROUP BY temporada, visitante
+                    FROM {_silver('partidas')}
+                    WHERE gols_mandante IS NOT NULL AND gols_visitante IS NOT NULL
+                    GROUP BY temporada, visitante
                 )
                 GROUP BY temporada, clube
             )
