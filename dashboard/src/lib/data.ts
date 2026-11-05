@@ -27,6 +27,10 @@ export type TemporadaMeta = {
   partidas_disputadas: number;
   total_gols: number; inicio: string; fim: string;
 };
+export type FairPlay = {
+  temporada: number; clube: string; amarelos: number; vermelhos: number;
+  pontos_fair_play: number; partidas_com_cartao: number;
+};
 export type RebaixamentoAcesso = {
   temporada: number; clube: string; posicao: number; pontos: number;
   situacao: "Campeão" | "Libertadores" | "Sul-Americana" | "Rebaixado" | "Manutenção" | "Em andamento";
@@ -52,7 +56,7 @@ export const getData = {
   gols:            () => fetchJson<Gol>("gols"),
   cartoes:         () => fetchJson<Cartao>("cartoes"),
   artilharia:      () => fetchJson<Artilharia>("artilharia"),
-  fairPlay:        () => fetchJson<any>("fair_play"),
+  fairPlay:        () => fetchJson<FairPlay>("fair_play"),
   campeoes:        () => fetchJson<Campeao>("campeoes"),
   temporadasMeta:  () => fetchJson<TemporadaMeta>("temporadas_meta"),
   desempenho:      () => fetchJson<DesempenhoClube>("desempenho_clubes"),

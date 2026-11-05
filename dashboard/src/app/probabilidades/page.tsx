@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getData } from "@/lib/data";
-import { simularTemporada, ZONAS, type SimResult, type TeamSim, type Zona } from "@/lib/simulacao";
+import { simularTemporada, type SimResult, type TeamSim, type Zona, type Zonas } from "@/lib/simulacao";
 import ClubCrest from "@/components/ClubCrest";
 import { Percent, Trophy, ShieldAlert, Globe2, Star, Info } from "lucide-react";
 
@@ -19,7 +19,7 @@ function fmtProb(t: TeamSim, z: Zona): { txt: string; title: string } {
   return { txt: `${nf1.format(p * 100)}%`, title: "" };
 }
 
-function zonaDaPosicao(pos: number): Zona | null {
+function zonaDaPosicao(pos: number, ZONAS: Zonas): Zona | null {
   if (pos === 1) return "titulo";
   if (pos <= ZONAS.libertadores.ate) return "libertadores";
   if (pos >= ZONAS.sula.de && pos <= ZONAS.sula.ate) return "sula";
@@ -28,10 +28,9 @@ function zonaDaPosicao(pos: number): Zona | null {
 }
 
 /* ── célula de probabilidade ─────────────────────────────────── */
-function ProbCell({ t, z, className = "" }: { t: TeamSim; z: Zona; className?: string }) {
+function ProbCell({ t, z, cor, className = "" }: { t: TeamSim; z: Zona; cor: string; className?: string }) {
   const { txt, title } = fmtProb(t, z);
   const p = t.garantido[z] ? 1 : t.eliminado[z] ? 0 : t.prob[z];
-  const cor = ZONAS[z].cor;
   const alpha = p > 0 ? Math.round((0.06 + 0.5 * p) * 255).toString(16).padStart(2, "0") : "00";
   return (
     <td className={`text-center tabular-nums text-xs font-semibold ${className}`} title={title || undefined}
@@ -47,12 +46,11 @@ function ProbCell({ t, z, className = "" }: { t: TeamSim; z: Zona; className?: s
 
 /* ── card de destaque ────────────────────────────────────────── */
 function DestaqueCard({
-  titulo, icon, zona, times, garantidos, vazio,
+  titulo, icon, zona, cor, times, garantidos, vazio,
 }: {
-  titulo: string; icon: React.ReactNode; zona: Zona;
+  titulo: string; icon: React.ReactNode; zona: Zona; cor: string;
   times: TeamSim[]; garantidos: TeamSim[]; vazio: string;
 }) {
-  const cor = ZONAS[zona].cor;
   return (
     <div className="card flex flex-col gap-3" style={{ borderTop: `3px solid ${cor}` }}>
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--muted)" }}>
@@ -127,7 +125,9 @@ export default function ProbabilidadesPage() {
     </div>
   );
 
-  const { times, temporada, jogosRestantes, ultimaRodada, nSims } = sim;
+  const { times, temporada, jogosRestantes, ultimaRodada, nSims, zonas: ZONAS } = sim;
+  const faixa = (z: Zona) => `${ZONAS[z].de}º–${ZONAS[z].ate}º`;
+  const nLib = ZONAS.libertadores.ate;
   const nT = times.length;
   const encerrado = jogosRestantes === 0;
   const incerto = (z: Zona, min = 0.005) =>
@@ -169,16 +169,16 @@ export default function ProbabilidadesPage() {
 
       {/* destaques */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <DestaqueCard titulo="Título" zona="titulo" icon={<Trophy size={14} style={{ color: ZONAS.titulo.cor }} />}
+        <DestaqueCard titulo="Título" zona="titulo" cor={ZONAS.titulo.cor} icon={<Trophy size={14} style={{ color: ZONAS.titulo.cor }} />}
           times={incerto("titulo", 0.001).slice(0, 5)} garantidos={certos("titulo")}
           vazio="Campeão já definido." />
-        <DestaqueCard titulo="Libertadores (G6)" zona="libertadores" icon={<Star size={14} style={{ color: ZONAS.libertadores.cor }} />}
+        <DestaqueCard titulo={`Libertadores (G${nLib})`} zona="libertadores" cor={ZONAS.libertadores.cor} icon={<Star size={14} style={{ color: ZONAS.libertadores.cor }} />}
           times={incerto("libertadores").slice(0, 6)} garantidos={certos("libertadores")}
           vazio="Vagas já definidas." />
-        <DestaqueCard titulo="Sul-Americana (7º–12º)" zona="sula" icon={<Globe2 size={14} style={{ color: ZONAS.sula.cor }} />}
+        <DestaqueCard titulo={`Sul-Americana (${faixa("sula")})`} zona="sula" cor={ZONAS.sula.cor} icon={<Globe2 size={14} style={{ color: ZONAS.sula.cor }} />}
           times={incerto("sula").slice(0, 6)} garantidos={[]}
           vazio="Vagas já definidas." />
-        <DestaqueCard titulo="Rebaixamento (Z4)" zona="rebaixamento" icon={<ShieldAlert size={14} style={{ color: ZONAS.rebaixamento.cor }} />}
+        <DestaqueCard titulo="Rebaixamento (Z4)" zona="rebaixamento" cor={ZONAS.rebaixamento.cor} icon={<ShieldAlert size={14} style={{ color: ZONAS.rebaixamento.cor }} />}
           times={incerto("rebaixamento").slice(0, 6)} garantidos={certos("rebaixamento")}
           vazio="Rebaixados já definidos." />
       </div>
@@ -200,14 +200,14 @@ export default function ProbabilidadesPage() {
               <th title="Posição final média" className="hidden md:table-cell">Pos. méd.</th>
               <th>Título</th>
               <th className="hidden sm:table-cell" title="Fase de grupos direta (1º–4º)">G4</th>
-              <th title="1º–6º (vagas podem aumentar via Copa do Brasil/Libertadores)">Libertadores</th>
-              <th title="7º–12º">Sul-Americana</th>
-              <th title="17º–20º">Rebaixamento</th>
+              <th title={`${faixa("libertadores")} (vagas podem aumentar via Copa do Brasil/Libertadores/Sul-Americana)`}>Libertadores</th>
+              <th title={faixa("sula")}>Sul-Americana</th>
+              <th title={faixa("rebaixamento")}>Rebaixamento</th>
             </tr>
           </thead>
           <tbody>
             {times.map(t => {
-              const zona = zonaDaPosicao(t.posAtual);
+              const zona = zonaDaPosicao(t.posAtual, ZONAS);
               return (
                 <tr key={t.clube}>
                   <td className="text-center text-xs font-semibold"
@@ -235,11 +235,11 @@ export default function ProbabilidadesPage() {
                   <td className="text-center tabular-nums hidden md:table-cell" style={{ color: "var(--muted)" }}>
                     {nf1.format(t.posMedia)}
                   </td>
-                  <ProbCell t={t} z="titulo" />
-                  <ProbCell t={t} z="g4" className="hidden sm:table-cell" />
-                  <ProbCell t={t} z="libertadores" />
-                  <ProbCell t={t} z="sula" />
-                  <ProbCell t={t} z="rebaixamento" />
+                  <ProbCell t={t} z="titulo" cor={ZONAS.titulo.cor} />
+                  <ProbCell t={t} z="g4" cor={ZONAS.g4.cor} className="hidden sm:table-cell" />
+                  <ProbCell t={t} z="libertadores" cor={ZONAS.libertadores.cor} />
+                  <ProbCell t={t} z="sula" cor={ZONAS.sula.cor} />
+                  <ProbCell t={t} z="rebaixamento" cor={ZONAS.rebaixamento.cor} />
                 </tr>
               );
             })}
@@ -265,7 +265,7 @@ export default function ProbabilidadesPage() {
             <tr>
               <th className="text-left font-semibold pb-1 pr-2" style={{ color: "var(--muted)" }}>Clube</th>
               {Array.from({ length: nT }, (_, k) => {
-                const z = zonaDaPosicao(k + 1);
+                const z = zonaDaPosicao(k + 1, ZONAS);
                 return (
                   <th key={k} className="font-semibold pb-1 min-w-[30px]"
                     style={{ color: "var(--muted)", borderBottom: `2px solid ${z ? ZONAS[z].cor : "var(--border)"}` }}>
@@ -333,9 +333,10 @@ export default function ProbabilidadesPage() {
           </li>
           <li>Desempate: pontos, vitórias, saldo de gols e gols pró (demais critérios por sorteio).</li>
           <li>
-            Zonas consideradas: título (1º), Libertadores (1º–6º, sendo 1º–4º direto na fase de grupos), Sul-Americana
-            (7º–12º) e rebaixamento (17º–20º). As vagas continentais podem aumentar se clubes do G6 vencerem a Copa do
-            Brasil ou a Libertadores.
+            Zonas consideradas ({temporada}): título (1º), Libertadores ({faixa("libertadores")}, sendo 1º–4º direto na
+            fase de grupos), Sul-Americana ({faixa("sula")}) e rebaixamento ({faixa("rebaixamento")}). As vagas
+            continentais podem aumentar (G{nLib} virar G{nLib + 1}, G{nLib + 2}…) se clubes já classificados vencerem a
+            Copa do Brasil, a Libertadores ou a Sul-Americana — esse efeito não é simulado.
           </li>
           <li>Os valores ✓/– são verificados matematicamente pelos pontos máximos ainda possíveis.</li>
         </ul>

@@ -13,7 +13,7 @@ Tables produced:
 import logging
 import duckdb
 from pathlib import Path
-from config import SILVER_DIR, GOLD_DIR, TEAMS_PER_SEASON, RELEGATION_SPOTS
+from config import SILVER_DIR, GOLD_DIR, AJUSTES_PONTOS, zonas_temporada
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 log = logging.getLogger(__name__)
@@ -168,6 +168,14 @@ def build_fair_play(con: duckdb.DuckDBPyConnection) -> None:
     _write(con, sql, GOLD_DIR / "fair_play.parquet")
 
 
+def _ajustes_sql() -> str:
+    """Tabela inline (temporada, clube, ajuste) com as punições de pontos."""
+    linhas = ", ".join(
+        f"({t}, '{c.replace(chr(39), chr(39) * 2)}', {p})" for (t, c), p in AJUSTES_PONTOS.items()
+    )
+    return f"(SELECT * FROM (VALUES {linhas}) AS a(temporada, clube, ajuste))"
+
+
 def build_classificacao_historica(con: duckdb.DuckDBPyConnection) -> None:
     """
     Compute final standings per season from match results.
@@ -216,28 +224,46 @@ def build_classificacao_historica(con: duckdb.DuckDBPyConnection) -> None:
                 )
                 GROUP BY temporada, clube
             )
+            -- pontos = campo + punições da Justiça Desportiva (config.AJUSTES_PONTOS)
+            , com_ajuste AS (
+                SELECT c.*,
+                    c.vitorias * 3 + c.empates + COALESCE(a.ajuste, 0) AS pontos,
+                    COALESCE(a.ajuste, 0) AS ajuste_pontos
+                FROM combined c
+                LEFT JOIN {_ajustes_sql()} a USING (temporada, clube)
+            )
             SELECT
                 temporada, clube, jogos, vitorias, empates, derrotas,
-                vitorias * 3 + empates AS pontos,
+                pontos,
                 gols_pro, gols_contra,
                 gols_pro - gols_contra AS saldo_gols,
                 ROW_NUMBER() OVER (PARTITION BY temporada
                                    ORDER BY pontos DESC, vitorias DESC, saldo_gols DESC, gols_pro DESC, clube)
-                    AS posicao
-            FROM combined
+                    AS posicao,
+                ajuste_pontos
+            FROM com_ajuste
             ORDER BY temporada, posicao
         """
     _write(con, sql, GOLD_DIR / "classificacao_historica.parquet")
 
 
 def build_rebaixamento_acesso(con: duckdb.DuckDBPyConnection) -> None:
-    """Derive promotion/relegation from computed final standings."""
+    """Situação final por clube conforme as zonas do regulamento de cada época
+    (config.zonas_temporada). Não reflete vagas herdadas via copas."""
     class_path = GOLD_DIR / "classificacao_historica.parquet"
     if not class_path.exists():
         log.warning("classificacao_historica.parquet não encontrada — rode primeiro")
         return
 
-    n_relegated = RELEGATION_SPOTS
+    temporadas = [r[0] for r in con.execute(
+        f"SELECT DISTINCT temporada FROM read_parquet('{class_path.as_posix()}')").fetchall()]
+    zonas_rows = []
+    for t in temporadas:
+        z = zonas_temporada(t)
+        sula_de, sula_ate = z["sula"] if z["sula"] else ("NULL", "NULL")
+        zonas_rows.append(f"({t}, {z['libertadores'][1]}, {sula_de}, {sula_ate}, {z['rebaixados']})")
+    zonas_sql = (f"(SELECT * FROM (VALUES {', '.join(zonas_rows)}) "
+                 "AS z(temporada, lib_ate, sula_de, sula_ate, rebaixados))")
     # Só rotula Campeão/Libertadores/Rebaixado em temporadas encerradas
     # (todas as partidas com placar). Em temporada em andamento a posição
     # é provisória — rotular o líder como "Campeão" seria falso.
@@ -258,9 +284,11 @@ def build_rebaixamento_acesso(con: duckdb.DuckDBPyConnection) -> None:
                 c.posicao,
                 c.pontos,
                 MAX(c.posicao) OVER (PARTITION BY c.temporada) AS total_times,
-                COALESCE(s.encerrada, TRUE) AS encerrada
+                COALESCE(s.encerrada, TRUE) AS encerrada,
+                z.lib_ate, z.sula_de, z.sula_ate, z.rebaixados
             FROM read_parquet('{class_path.as_posix()}') c
             LEFT JOIN status_temporada s USING (temporada)
+            LEFT JOIN {zonas_sql} z USING (temporada)
         )
         SELECT
             temporada,
@@ -270,9 +298,9 @@ def build_rebaixamento_acesso(con: duckdb.DuckDBPyConnection) -> None:
             CASE
                 WHEN NOT encerrada                             THEN 'Em andamento'
                 WHEN posicao = 1                               THEN 'Campeão'
-                WHEN posicao <= 4                              THEN 'Libertadores'
-                WHEN posicao <= 6                              THEN 'Sul-Americana'
-                WHEN posicao > total_times - {n_relegated}    THEN 'Rebaixado'
+                WHEN posicao <= lib_ate                        THEN 'Libertadores'
+                WHEN posicao BETWEEN sula_de AND sula_ate      THEN 'Sul-Americana'
+                WHEN posicao > total_times - rebaixados        THEN 'Rebaixado'
                 ELSE 'Manutenção'
             END AS situacao
         FROM ranked

@@ -29,14 +29,27 @@ const DEFAULT_HOME_GOALS  = 1.45;
 const DEFAULT_AWAY_GOALS  = 1.05;
 
 /* ── zonas de classificação (Série A, 20 clubes) ─────────────── */
-export const ZONAS = {
-  titulo:       { de: 1,  ate: 1,  label: "Título",        cor: "#f5c518" },
-  g4:           { de: 1,  ate: 4,  label: "G4",            cor: "#00d25b" },
-  libertadores: { de: 1,  ate: 6,  label: "Libertadores",  cor: "#00d25b" },
-  sula:         { de: 7,  ate: 12, label: "Sul-Americana", cor: "#3d7cf5" },
-  rebaixamento: { de: 17, ate: 20, label: "Rebaixamento",  cor: "#e94560" },
-} as const;
-export type Zona = keyof typeof ZONAS;
+// Faixas garantidas pelo regulamento — sem as vagas "herdadas" quando um clube
+// já classificado vence a Copa do Brasil/Libertadores/Sul-Americana.
+//   2016–2025: G6 Libertadores (1º–4º grupos, 5º–6º pré) · 7º–12º Sul-Americana
+//   2026+:     Copa do Brasil passa a dar 2 vagas → G5 Libertadores
+//              (1º–4º grupos, 5º pré) · 6º–11º Sul-Americana
+// Mantenha alinhado com datalake/pipelines/config.py::zonas_temporada.
+export type FaixaZona = { de: number; ate: number; label: string; cor: string };
+export type Zona = "titulo" | "g4" | "libertadores" | "sula" | "rebaixamento";
+export type Zonas = Record<Zona, FaixaZona>;
+export const ZONA_ORDEM: Zona[] = ["titulo", "g4", "libertadores", "sula", "rebaixamento"];
+
+export function zonasDaTemporada(ano: number, nTimes = 20): Zonas {
+  const libAte = ano >= 2026 ? 5 : 6;
+  return {
+    titulo:       { de: 1,           ate: 1,           label: "Título",        cor: "#f5c518" },
+    g4:           { de: 1,           ate: 4,           label: "G4",            cor: "#00d25b" },
+    libertadores: { de: 1,           ate: libAte,      label: "Libertadores",  cor: "#00d25b" },
+    sula:         { de: libAte + 1,  ate: libAte + 6,  label: "Sul-Americana", cor: "#3d7cf5" },
+    rebaixamento: { de: nTimes - 3,  ate: nTimes,      label: "Rebaixamento",  cor: "#e94560" },
+  };
+}
 
 export type Ratings = Map<string, { att: number; def: number }>;
 
@@ -58,6 +71,7 @@ export type TeamSim = {
 
 export type SimResult = {
   temporada: number;
+  zonas: Zonas;
   times: TeamSim[];
   jogosRestantes: number;
   jogosDisputados: number;
@@ -180,6 +194,7 @@ export function simularTemporada(todas: Partida[], temporada?: number, nSims = N
   if (!jogos.length) return null;
   const times = [...new Set(jogos.flatMap(p => [p.mandante, p.visitante]))].sort();
   const nT = times.length;
+  const ZONAS = zonasDaTemporada(ano, nT);
 
   // prior a partir da temporada anterior
   const anteriores = todas.filter(p => p.temporada === ano - 1);
@@ -251,7 +266,7 @@ export function simularTemporada(todas: Partida[], temporada?: number, nSims = N
     const dist = posCount[i].map(c => c / nSims);
     const faixa = (de: number, ate: number) => dist.slice(de - 1, ate).reduce((a, b) => a + b, 0);
     const prob = Object.fromEntries(
-      (Object.keys(ZONAS) as Zona[]).map(z => [z, faixa(ZONAS[z].de, ZONAS[z].ate)])
+      ZONA_ORDEM.map(z => [z, faixa(ZONAS[z].de, ZONAS[z].ate)])
     ) as Record<Zona, number>;
 
     // Garantido: menos de `ate` outros clubes ainda conseguem igualar/passar.
@@ -292,6 +307,7 @@ export function simularTemporada(todas: Partida[], temporada?: number, nSims = N
 
   return {
     temporada: ano,
+    zonas: ZONAS,
     times: timesSim,
     jogosRestantes: restantes.length,
     jogosDisputados: jogos.length - restantes.length,
