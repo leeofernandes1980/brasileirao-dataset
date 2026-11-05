@@ -51,10 +51,16 @@ print("→ Campeões")
 export_json("campeoes", f"""
     WITH ranked AS (
         SELECT temporada, clube, pontos,
-               ROW_NUMBER() OVER (PARTITION BY temporada ORDER BY pontos DESC) AS pos
+               posicao AS pos
         FROM read_parquet('{parquet("classificacao_historica")}')
     )
-    SELECT temporada, clube, pontos FROM ranked WHERE pos = 1
+    SELECT temporada, clube, pontos FROM ranked
+    WHERE pos = 1
+      -- temporada em andamento não tem campeão
+      AND temporada NOT IN (
+          SELECT temporada FROM read_parquet('{parquet("rebaixamento_acesso")}')
+          WHERE situacao = 'Em andamento'
+      )
     ORDER BY temporada DESC
 """)
 

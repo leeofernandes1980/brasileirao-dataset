@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { getData, type Classificacao, type Partida, type Artilharia } from "@/lib/data";
-import { fmt } from "@/lib/utils";
 import { Trophy, ChevronLeft } from "lucide-react";
 import ClubCrest from "@/components/ClubCrest";
 
@@ -39,7 +38,7 @@ export default function TemporadaPage() {
       setPartidas(ps);
       setArtilh(a.filter(x => x.temporada === temporada).sort((a,b) => b.gols - a.gols).slice(0, 15));
       const map: Record<string, string> = {};
-      r.filter((x: any) => x.temporada === temporada).forEach((x: any) => { map[x.clube] = x.situacao; });
+      r.filter(x => x.temporada === temporada).forEach(x => { map[x.clube] = x.situacao; });
       setRebx(map);
       const rods = [...new Set(ps.map(x => x.rodada))].sort((a, b) => b - a);
       setRodada(rods[0] || 1);
@@ -55,7 +54,8 @@ export default function TemporadaPage() {
   const rodadas = [...new Set(partidas.map(p => p.rodada))].sort((a, b) => a - b);
   const jogosDaRodada = partidas.filter(p => p.rodada === rodada)
     .sort((a, b) => (a.data || "").localeCompare(b.data || ""));
-  const campeao = classif[0]?.clube;
+  const emAndamento = partidas.some(p => p.gols_mandante === null || p.gols_visitante === null);
+  const campeao = emAndamento ? undefined : classif[0]?.clube;
 
   return (
     <div className="space-y-5">
@@ -71,7 +71,7 @@ export default function TemporadaPage() {
             Chances de título, Libertadores e rebaixamento →
           </Link>
         )}
-        {campeao && temporada < 2026 && (
+        {campeao && (
           <div className="flex items-center gap-1.5 text-sm font-semibold ml-auto"
             style={{ color: "var(--yellow)" }}>
             <Trophy size={15} /> Campeao: {campeao}
@@ -82,7 +82,7 @@ export default function TemporadaPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* classificação */}
         <div className="card lg:col-span-2 overflow-x-auto">
-          <h2 className="font-semibold mb-3 text-sm" style={{ color: "var(--fg)" }}>Classificacao Final</h2>
+          <h2 className="font-semibold mb-3 text-sm" style={{ color: "var(--fg)" }}>{emAndamento ? "Classificação atual" : "Classificação final"}</h2>
           <table className="table-auto w-full text-sm">
             <thead>
               <tr>

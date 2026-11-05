@@ -27,6 +27,10 @@ export type TemporadaMeta = {
   partidas_disputadas: number;
   total_gols: number; inicio: string; fim: string;
 };
+export type RebaixamentoAcesso = {
+  temporada: number; clube: string; posicao: number; pontos: number;
+  situacao: "Campeão" | "Libertadores" | "Sul-Americana" | "Rebaixado" | "Manutenção" | "Em andamento";
+};
 export type Campeao = { temporada: number; clube: string; pontos: number };
 export type DesempenhoClube = {
   temporada: number; clube: string; jogos: number;
@@ -53,5 +57,5 @@ export const getData = {
   temporadasMeta:  () => fetchJson<TemporadaMeta>("temporadas_meta"),
   desempenho:      () => fetchJson<DesempenhoClube>("desempenho_clubes"),
   clubes:          () => fetchJson<{ clube: string }>("clubes"),
-  rebaixamento:    () => fetchJson<any>("rebaixamento_acesso"),
+  rebaixamento:    () => fetchJson<RebaixamentoAcesso>("rebaixamento_acesso"),
 };

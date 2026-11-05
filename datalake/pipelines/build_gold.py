@@ -222,7 +222,7 @@ def build_classificacao_historica(con: duckdb.DuckDBPyConnection) -> None:
                 gols_pro, gols_contra,
                 gols_pro - gols_contra AS saldo_gols,
                 ROW_NUMBER() OVER (PARTITION BY temporada
-                                   ORDER BY pontos DESC, saldo_gols DESC, gols_pro DESC)
+                                   ORDER BY pontos DESC, vitorias DESC, saldo_gols DESC, gols_pro DESC, clube)
                     AS posicao
             FROM combined
             ORDER BY temporada, posicao
@@ -238,15 +238,29 @@ def build_rebaixamento_acesso(con: duckdb.DuckDBPyConnection) -> None:
         return
 
     n_relegated = RELEGATION_SPOTS
+    # Só rotula Campeão/Libertadores/Rebaixado em temporadas encerradas
+    # (todas as partidas com placar). Em temporada em andamento a posição
+    # é provisória — rotular o líder como "Campeão" seria falso.
     sql = f"""
-        WITH ranked AS (
+        WITH status_temporada AS (
             SELECT
                 temporada,
-                clube,
-                posicao,
-                pontos,
-                MAX(posicao) OVER (PARTITION BY temporada) AS total_times
-            FROM read_parquet('{class_path.as_posix()}')
+                COUNT(*) > 0
+                  AND COUNT(*) = COUNT(gols_mandante)
+                  AND COUNT(*) = COUNT(gols_visitante) AS encerrada
+            FROM {_silver('partidas')}
+            GROUP BY temporada
+        ),
+        ranked AS (
+            SELECT
+                c.temporada,
+                c.clube,
+                c.posicao,
+                c.pontos,
+                MAX(c.posicao) OVER (PARTITION BY c.temporada) AS total_times,
+                COALESCE(s.encerrada, TRUE) AS encerrada
+            FROM read_parquet('{class_path.as_posix()}') c
+            LEFT JOIN status_temporada s USING (temporada)
         )
         SELECT
             temporada,
@@ -254,6 +268,7 @@ def build_rebaixamento_acesso(con: duckdb.DuckDBPyConnection) -> None:
             posicao,
             pontos,
             CASE
+                WHEN NOT encerrada                             THEN 'Em andamento'
                 WHEN posicao = 1                               THEN 'Campeão'
                 WHEN posicao <= 4                              THEN 'Libertadores'
                 WHEN posicao <= 6                              THEN 'Sul-Americana'
