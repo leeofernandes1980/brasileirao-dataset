@@ -66,6 +66,11 @@ export default function TemporadaPage() {
         </Link>
         <h1 className="text-2xl font-bold" style={{ color: "var(--fg)" }}>Brasileirao {temporada}</h1>
         {temporada === 2026 && <span className="badge-green text-xs">Ao vivo</span>}
+        {temporada === 2026 && (
+          <Link href="/probabilidades" className="badge-blue text-xs hover:underline ml-auto">
+            Chances de título, Libertadores e rebaixamento →
+          </Link>
+        )}
         {campeao && temporada < 2026 && (
           <div className="flex items-center gap-1.5 text-sm font-semibold ml-auto"
             style={{ color: "var(--yellow)" }}>

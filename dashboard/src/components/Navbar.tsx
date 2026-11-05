@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { BarChart2, Home, Users, Calendar, Swords, Search, Zap } from "lucide-react";
+import { BarChart2, Home, Users, Calendar, Swords, Search, Zap, Percent } from "lucide-react";
 
 const links = [
   { href: "/",           label: "Início",     icon: Home },
@@ -10,6 +10,7 @@ const links = [
   { href: "/times",      label: "Times",      icon: Users },
   { href: "/confrontos", label: "Confrontos", icon: Swords },
   { href: "/rodada",     label: "Rodada",     icon: Zap },
+  { href: "/probabilidades", label: "Probabilidades", icon: Percent },
   { href: "/consultas",  label: "Consultas",  icon: Search },
 ];
 
