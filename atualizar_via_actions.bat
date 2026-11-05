@@ -30,6 +30,12 @@ if errorlevel 1 (
 
 cd /d "%~dp0"
 
+rem Guarda o ID da ultima run MANUAL antes de disparar: assim, depois, da
+rem pra reconhecer a run nova com certeza (e nao confundir com a run do
+rem cron de 12h nem com uma run manual anterior que ainda esteja listada).
+set PREV_ID=
+for /f "usebackq tokens=*" %%R in (`gh run list --workflow=atualizar-rodada.yml --event workflow_dispatch --limit 1 --json databaseId --jq ".[0].databaseId"`) do set PREV_ID=%%R
+
 echo Disparando a Action "Atualizar Rodada Brasileirao"...
 gh workflow run atualizar-rodada.yml -f fallback_rapidapi=true
 if errorlevel 1 (
@@ -40,13 +46,21 @@ if errorlevel 1 (
 
 echo.
 echo Aguardando a run aparecer...
-ping -n 9 127.0.0.1 >nul
-
-for /f "usebackq tokens=*" %%R in (`gh run list --workflow=atualizar-rodada.yml --limit 1 --json databaseId --jq ".[0].databaseId"`) do set RUN_ID=%%R
+rem Espera ate surgir uma run manual com ID diferente da anterior
+rem (tenta a cada ~5s, por ate ~60s).
+set RUN_ID=
+set TENTATIVA=0
+:esperar_run
+set /a TENTATIVA+=1
+ping -n 6 127.0.0.1 >nul
+set NOVO_ID=
+for /f "usebackq tokens=*" %%R in (`gh run list --workflow=atualizar-rodada.yml --event workflow_dispatch --limit 1 --json databaseId --jq ".[0].databaseId"`) do set NOVO_ID=%%R
+if not "%NOVO_ID%"=="" if not "%NOVO_ID%"=="%PREV_ID%" set RUN_ID=%NOVO_ID%
+if "%RUN_ID%"=="" if %TENTATIVA% LSS 12 goto esperar_run
 
 if "%RUN_ID%"=="" (
-    echo Nao consegui identificar a run automaticamente. Acompanhe manualmente com:
-    echo   gh run list --workflow=atualizar-rodada.yml
+    echo Nao consegui identificar a run nova automaticamente. Acompanhe manualmente com:
+    echo   gh run list --workflow=atualizar-rodada.yml --event workflow_dispatch
     pause
     exit /b 0
 )
